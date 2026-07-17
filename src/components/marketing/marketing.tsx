@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -14,6 +15,7 @@ export function PageHero({
   primaryAction,
   secondaryAction,
   aside,
+  showBrandLogo = false,
 }: Readonly<{
   eyebrow: string;
   title: string;
@@ -21,11 +23,23 @@ export function PageHero({
   primaryAction?: PublicAction;
   secondaryAction?: PublicAction;
   aside?: ReactNode;
+  showBrandLogo?: boolean;
 }>) {
   return (
     <section className={styles.pageHero} aria-labelledby="page-title">
       <div className={styles.heroGrid}>
         <div className={styles.heroContent}>
+          {showBrandLogo ? (
+            <div className={styles.heroBrandLogo}>
+              <Image
+                src="/images/Logo-header.webp"
+                alt="Barnes Hauling and Disposal"
+                width={761}
+                height={328}
+                priority
+              />
+            </div>
+          ) : null}
           <p className={styles.eyebrow}>{eyebrow}</p>
           <h1 id="page-title">{title}</h1>
           <p className={styles.heroSummary}>{summary}</p>

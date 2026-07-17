@@ -28,6 +28,7 @@ export default function Home() {
   return (
     <>
       <PageHero
+        showBrandLogo
         eyebrow="Hauling & disposal, without the guesswork"
         title="The heavy work, clearly planned."
         summary="Choose full-service hauling when you want the loading handled, or plan a dumpster rental when your project needs room to work. Confirmed rates and restrictions are shown up front."

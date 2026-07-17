@@ -48,6 +48,20 @@
   gap: var(--space-5);
 }
 
+.heroBrandLogo {
+  width: clamp(11rem, 18vw, 15rem);
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: var(--radius-control);
+  background: rgb(247 247 244 / 92%);
+}
+
+.heroBrandLogo img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .eyebrow {
   margin: 0;
   color: var(--color-accent-strong);
