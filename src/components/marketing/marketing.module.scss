@@ -1,0 +1,783 @@
+@use "../../styles/mixins" as *;
+
+.pageHero {
+  position: relative;
+  overflow: hidden;
+  color: var(--color-text-inverse);
+  background: var(--color-ink);
+}
+
+.pageHero::after {
+  position: absolute;
+  right: -8rem;
+  bottom: -15rem;
+  width: 34rem;
+  height: 34rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 50%;
+  box-shadow: 0 0 0 5rem rgb(255 255 255 / 2%), 0 0 0 10rem rgb(255 255 255 / 2%);
+  content: "";
+}
+
+.heroGrid {
+  @include container;
+
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: clamp(34rem, 68vh, 46rem);
+  grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 0.75fr);
+  align-items: center;
+  gap: clamp(3rem, 8vw, 8rem);
+  padding-block: clamp(5rem, 10vw, 9rem);
+}
+
+.heroContent {
+  display: grid;
+  max-width: 52rem;
+  gap: var(--space-5);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-accent-strong);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pageHero .eyebrow,
+.ctaBand .eyebrow,
+.darkSection .eyebrow {
+  color: var(--color-brand-soft);
+}
+
+.heroContent h1 {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--font-display), Impact, sans-serif;
+  font-size: clamp(3.75rem, 10vw, 8.5rem);
+  font-weight: 400;
+  line-height: 0.88;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.heroSummary {
+  max-width: 42rem;
+  margin: 0;
+  color: rgb(255 255 255 / 76%);
+  font-size: var(--text-lead);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.heroAside {
+  position: relative;
+  z-index: 1;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.primaryButton,
+.secondaryButton,
+.accentButton,
+.inverseButton {
+  display: inline-flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 1.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: var(--font-heading), "Arial Narrow", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 820;
+  text-decoration: none;
+}
+
+.primaryButton,
+.accentButton {
+  color: white;
+  background: var(--color-accent);
+}
+
+.secondaryButton,
+.inverseButton {
+  border-color: rgb(255 255 255 / 38%);
+  color: white;
+}
+
+.section,
+.surfaceSection,
+.darkSection {
+  padding-block: clamp(4.5rem, 9vw, 8rem);
+}
+
+.section {
+  background: var(--color-surface);
+}
+
+.surfaceSection {
+  background: var(--color-surface-raised);
+}
+
+.darkSection {
+  color: var(--color-text-inverse);
+  background: var(--color-charcoal);
+}
+
+.sectionInner {
+  @include container;
+}
+
+.sectionIntro {
+  display: grid;
+  max-width: 49rem;
+  gap: var(--space-4);
+  margin-bottom: clamp(2.5rem, 6vw, 4.5rem);
+}
+
+.sectionIntro h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: clamp(2.25rem, 5vw, 4.6rem);
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+  font-family: var(--font-heading), "Arial Narrow", sans-serif;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.darkSection .sectionIntro h2 {
+  color: white;
+}
+
+.sectionIntro > p:last-child {
+  max-width: 43rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-lead);
+}
+
+.darkSection .sectionIntro > p:last-child {
+  color: rgb(255 255 255 / 72%);
+}
+
+.serviceGrid,
+.priceGrid,
+.processGrid,
+.trustGrid,
+.detailGrid,
+.feeGrid,
+.entryGrid,
+.contactGrid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.serviceGrid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.serviceCard {
+  position: relative;
+  display: grid;
+  min-height: 28rem;
+  align-content: end;
+  overflow: hidden;
+  gap: var(--space-4);
+  padding: clamp(2rem, 5vw, 4rem);
+  border-radius: var(--radius-large);
+  color: white;
+  background: var(--color-ink);
+}
+
+.serviceCard:nth-child(2) {
+  color: white;
+  background: var(--color-brand);
+}
+
+.serviceCard::before {
+  position: absolute;
+  top: -5rem;
+  right: -5rem;
+  width: 18rem;
+  height: 18rem;
+  border: 1px solid currentcolor;
+  border-radius: 50%;
+  content: "";
+  opacity: 0.1;
+}
+
+.serviceCard > * {
+  position: relative;
+}
+
+.serviceCard .eyebrow {
+  color: inherit;
+  opacity: 0.72;
+}
+
+.serviceCard h3 {
+  max-width: 10ch;
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.serviceCard > p:not(.eyebrow) {
+  max-width: 34rem;
+  margin: 0;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.serviceCard a,
+.cardLink,
+.textLink {
+  width: fit-content;
+  margin-top: var(--space-3);
+  color: inherit;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.priceGrid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.priceCard {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  padding: clamp(1.5rem, 3vw, 2.2rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface-raised);
+  box-shadow: 0 1rem 3rem rgb(16 24 22 / 5%);
+}
+
+.priceCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.priceCardTop p,
+.priceCardTop span {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.priceCardTop p {
+  color: var(--color-accent-strong);
+}
+
+.priceCardTop span {
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-control);
+  color: var(--color-brand);
+  background: var(--color-surface-warm);
+}
+
+.priceCard h3 {
+  margin: var(--space-3) 0 0;
+  color: var(--color-ink);
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-family: var(--font-heading), "Arial Narrow", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.dimensions {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.rateFacts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: var(--space-3) 0 0;
+  border-block: 1px solid var(--color-border);
+}
+
+.rateFacts div {
+  padding-block: var(--space-4);
+}
+
+.rateFacts div + div {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border);
+}
+
+.rateFacts dt {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rateFacts dd {
+  margin: 0.1rem 0 0;
+  color: var(--color-ink);
+  font-weight: 800;
+}
+
+.checkList,
+.plainList {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.checkList li {
+  position: relative;
+  padding-left: 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.checkList li::before {
+  position: absolute;
+  top: 0.58rem;
+  left: 0;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+  content: "";
+}
+
+.cardLink {
+  color: var(--color-brand);
+}
+
+.processGrid {
+  grid-template-columns: repeat(3, 1fr);
+  counter-reset: process;
+}
+
+.processCard {
+  display: grid;
+  min-height: 19rem;
+  align-content: space-between;
+  gap: var(--space-8);
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  border-top: 1px solid rgb(255 255 255 / 25%);
+}
+
+.processCard > span {
+  color: var(--color-accent);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.8rem;
+}
+
+.processCard h3 {
+  margin: 0 0 var(--space-3);
+  font-size: 1.5rem;
+}
+
+.processCard p {
+  margin: 0;
+  color: rgb(255 255 255 / 68%);
+}
+
+.trustGrid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.trustCard,
+.detailCard,
+.entryCard,
+.contactCard {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface-raised);
+}
+
+.trustCard span {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--color-brand);
+  font-weight: 900;
+}
+
+.trustCard h3,
+.detailCard h3,
+.entryCard h2,
+.contactCard h2 {
+  margin: var(--space-6) 0 var(--space-3);
+  color: var(--color-ink);
+  font-size: 1.4rem;
+  letter-spacing: -0.025em;
+}
+
+.trustCard p,
+.detailCard p,
+.entryCard p,
+.contactCard p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.faqList {
+  border-top: 1px solid var(--color-border);
+}
+
+.faqList details {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.faqList summary {
+  position: relative;
+  padding: 1.5rem 3rem 1.5rem 0;
+  color: var(--color-ink);
+  cursor: pointer;
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  font-weight: 780;
+  list-style: none;
+}
+
+.faqList summary::-webkit-details-marker {
+  display: none;
+}
+
+.faqList summary::after {
+  position: absolute;
+  top: 1.55rem;
+  right: 0.2rem;
+  color: var(--color-accent-strong);
+  content: "+";
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.faqList details[open] summary::after {
+  content: "−";
+}
+
+.faqList details p {
+  max-width: 52rem;
+  padding: 0 3rem 1.5rem 0;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.ctaBand {
+  @include container;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto;
+  align-items: end;
+  gap: clamp(2rem, 7vw, 7rem);
+  padding: clamp(2.5rem, 6vw, 5rem);
+  border-radius: var(--radius-large);
+  margin-block: clamp(4rem, 8vw, 7rem);
+  color: white;
+  background: var(--color-ink);
+}
+
+.ctaBand h2 {
+  max-width: 15ch;
+  margin: var(--space-4) 0;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.ctaBand > div > p:last-child {
+  max-width: 42rem;
+  margin: 0;
+  color: rgb(255 255 255 / 72%);
+}
+
+.callout {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid rgb(78 106 42 / 38%);
+  border-radius: var(--radius-large);
+  color: var(--color-text);
+  background: rgb(78 106 42 / 13%);
+}
+
+.callout > :first-child {
+  margin-top: 0;
+}
+
+.callout > :last-child {
+  margin-bottom: 0;
+}
+
+.detailGrid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.detailCard h3 {
+  margin-top: 0;
+}
+
+.detailCard ul,
+.prose ul {
+  padding-left: 1.2rem;
+  margin: var(--space-4) 0 0;
+}
+
+.detailCard li + li,
+.prose li + li {
+  margin-top: 0.55rem;
+}
+
+.splitGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.75fr);
+  align-items: start;
+  gap: clamp(3rem, 9vw, 8rem);
+}
+
+.prose {
+  max-width: 48rem;
+}
+
+.prose h2 {
+  margin: 0 0 var(--space-5);
+  color: var(--color-ink);
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.prose h3 {
+  margin: var(--space-7) 0 var(--space-3);
+  color: var(--color-ink);
+  font-size: 1.35rem;
+}
+
+.prose p {
+  color: var(--color-text-muted);
+}
+
+.prose strong {
+  color: var(--color-text);
+}
+
+.feeGrid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.feeCard {
+  padding: var(--space-6);
+  border-left: 0.25rem solid var(--color-accent);
+  background: var(--color-surface-warm);
+}
+
+.feeCard h3 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 1.15rem;
+}
+
+.feeCard p {
+  margin: 0.4rem 0 0;
+  color: var(--color-text-muted);
+}
+
+.entryGrid,
+.contactGrid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.entryCard,
+.contactCard {
+  display: grid;
+  align-content: start;
+}
+
+.entryCard .eyebrow,
+.contactCard .eyebrow {
+  margin-bottom: var(--space-3);
+}
+
+.entryCard h2,
+.contactCard h2 {
+  margin-top: 0;
+}
+
+.entryCard a,
+.contactCard a {
+  width: fit-content;
+  margin-top: var(--space-6);
+  color: var(--color-brand);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-medium);
+  color: var(--color-text-muted);
+  background: var(--color-surface-warm);
+}
+
+.notice strong {
+  color: var(--color-ink);
+}
+
+.legalPlaceholder {
+  max-width: 50rem;
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-large);
+  margin-inline: auto;
+  text-align: center;
+}
+
+.legalPlaceholder h1 {
+  margin: var(--space-4) 0;
+  color: var(--color-ink);
+  font-size: clamp(2.4rem, 6vw, 5rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.legalPlaceholder p {
+  color: var(--color-text-muted);
+}
+
+.notFound {
+  @include container;
+
+  display: grid;
+  min-height: 65vh;
+  place-content: center;
+  padding-block: var(--space-10);
+  text-align: center;
+}
+
+.notFound span {
+  color: var(--color-accent-strong);
+  font-family: var(--font-mono), monospace;
+  font-weight: 800;
+}
+
+.notFound h1 {
+  margin: var(--space-3) 0;
+  color: var(--color-ink);
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+
+.notFound p {
+  max-width: 35rem;
+  margin: 0 auto var(--space-6);
+  color: var(--color-text-muted);
+}
+
+.notFound a {
+  justify-self: center;
+}
+
+@media (max-width: 62rem) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .heroAside {
+    max-width: 36rem;
+  }
+
+  .priceGrid,
+  .processGrid,
+  .trustGrid,
+  .feeGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .priceCard:last-child,
+  .processCard:last-child,
+  .trustCard:last-child,
+  .feeCard:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .ctaBand {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 44rem) {
+  .heroGrid {
+    min-height: auto;
+    padding-block: 4.5rem;
+  }
+
+  .heroContent h1 {
+    font-size: clamp(3rem, 15vw, 4.8rem);
+  }
+
+  .serviceGrid,
+  .priceGrid,
+  .processGrid,
+  .trustGrid,
+  .detailGrid,
+  .feeGrid,
+  .entryGrid,
+  .contactGrid,
+  .splitGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .priceCard:last-child,
+  .processCard:last-child,
+  .trustCard:last-child,
+  .feeCard:last-child {
+    grid-column: auto;
+  }
+
+  .serviceCard {
+    min-height: 23rem;
+  }
+
+  .processCard {
+    min-height: 15rem;
+  }
+
+  .ctaBand {
+    width: 100%;
+    border-radius: 0;
+  }
+
+  .ctaBand .actions,
+  .ctaBand .actions a,
+  .pageHero .actions,
+  .pageHero .actions a {
+    width: 100%;
+  }
+}

@@ -18,7 +18,7 @@ body {
   margin: 0;
   color: var(--color-text);
   background: var(--color-surface);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
   font-size: var(--text-body);
   line-height: 1.6;
   text-rendering: optimizeLegibility;
@@ -26,11 +26,31 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+body > main {
+  overflow: clip;
+}
+
+h1,
+h2,
+h3,
+p {
+  text-wrap: pretty;
+}
+
 button,
 input,
 textarea,
 select {
   font: inherit;
+}
+
+h1,
+h2,
+h3,
+button,
+summary,
+nav {
+  font-family: var(--font-heading), "Arial Narrow", sans-serif;
 }
 
 img,
@@ -44,6 +64,30 @@ a {
   color: inherit;
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.18em;
+}
+
+a,
+button,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: var(--space-3);
+  left: var(--space-3);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-small);
+  color: var(--color-ink);
+  background: var(--color-accent);
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 :focus-visible {
