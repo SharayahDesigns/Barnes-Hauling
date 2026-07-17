@@ -8,11 +8,11 @@
   background-image:
     linear-gradient(
       90deg,
-      rgb(11 12 10 / 98%) 0%,
-      rgb(11 12 10 / 91%) 48%,
-      rgb(11 12 10 / 72%) 100%
+      rgb(11 12 10 / 95%) 0%,
+      rgb(11 12 10 / 78%) 48%,
+      rgb(11 12 10 / 38%) 100%
     ),
-    linear-gradient(180deg, rgb(11 12 10 / 10%), rgb(11 12 10 / 68%)),
+    linear-gradient(180deg, rgb(11 12 10 / 4%), rgb(11 12 10 / 35%)),
     url("/images/foggyBG.webp");
   background-position: center;
   background-repeat: no-repeat;
@@ -749,7 +749,7 @@
 @media (max-width: 44rem) {
   .pageHero {
     background-image:
-      linear-gradient(rgb(11 12 10 / 90%), rgb(11 12 10 / 82%)),
+      linear-gradient(rgb(11 12 10 / 78%), rgb(11 12 10 / 68%)),
       url("/images/foggyBG.webp");
     background-position: 62% center;
   }
