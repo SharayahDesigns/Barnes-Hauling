@@ -19,6 +19,18 @@
   background-size: cover;
 }
 
+.brandedPageHero {
+  background-image:
+    linear-gradient(
+      90deg,
+      rgb(11 12 10 / 45%) 0%,
+      rgb(11 12 10 / 32%) 48%,
+      rgb(11 12 10 / 10%) 100%
+    ),
+    linear-gradient(180deg, rgb(11 12 10 / 10%), rgb(11 12 10 / 82%)),
+    url("/images/foggyBG.webp");
+}
+
 .pageHero::after {
   position: absolute;
   right: 0;
@@ -50,10 +62,6 @@
 
 .heroBrandLogo {
   width: clamp(15rem, 24vw, 21rem);
-  padding: 0.8rem 1rem;
-  border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: var(--radius-control);
-  background: rgb(247 247 244 / 92%);
 }
 
 .heroBrandLogo img {
@@ -75,6 +83,10 @@
 .ctaBand .eyebrow,
 .darkSection .eyebrow {
   color: var(--color-brand-soft);
+}
+
+.brandedPageHero .eyebrow {
+  color: var(--color-brand-deep);
 }
 
 .heroContent h1 {
@@ -766,6 +778,18 @@
       linear-gradient(rgb(11 12 10 / 78%), rgb(11 12 10 / 68%)),
       url("/images/foggyBG.webp");
     background-position: 62% center;
+  }
+
+  .brandedPageHero {
+    background-image:
+      linear-gradient(
+        rgb(11 12 10 / 35%) 0%,
+        rgb(11 12 10 / 38%) 24%,
+        rgb(11 12 10 / 48%) 27%,
+        rgb(11 12 10 / 76%) 33%,
+        rgb(11 12 10 / 82%) 100%
+      ),
+      url("/images/foggyBG.webp");
   }
 
   .heroGrid {

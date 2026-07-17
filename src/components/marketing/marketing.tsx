@@ -26,7 +26,10 @@ export function PageHero({
   showBrandLogo?: boolean;
 }>) {
   return (
-    <section className={styles.pageHero} aria-labelledby="page-title">
+    <section
+      className={`${styles.pageHero} ${showBrandLogo ? styles.brandedPageHero : ""}`}
+      aria-labelledby="page-title"
+    >
       <div className={styles.heroGrid}>
         <div className={styles.heroContent}>
           {showBrandLogo ? (
