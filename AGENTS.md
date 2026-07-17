@@ -10,13 +10,14 @@ Read the relevant files in `docs/requirements/` before implementing a feature. S
 
 - `docs/requirements/01-project-vision-and-architecture.md`
 - `docs/requirements/02-customer-journeys.md`
+- `docs/requirements/15-technology-stack.md`
 - `docs/requirements/17-development-phases.md`
 - `docs/requirements/18-out-of-scope.md`
 - `docs/requirements/19-ai-agent-instructions.md`
 
 Then read the feature-specific documents and original material under `docs/reference/`.
 
-The supplied set is missing section `15`. Do not infer its contents. Flag missing business, legal, operational, pricing, or service-area decisions for the user.
+The numbered requirement set is complete from sections `01` through `20`. Still flag business, legal, operational, pricing, or service-area decisions that the documents do not explicitly resolve.
 
 ## Current technology
 
