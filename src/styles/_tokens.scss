@@ -1,0 +1,38 @@
+:root {
+  // Provisional brand palette. Keep semantic usage stable if colors change.
+  --color-ink: #101816;
+  --color-text: #1d2926;
+  --color-text-muted: #5f6e69;
+  --color-text-inverse: #ffffff;
+  --color-brand: #173f35;
+  --color-brand-deep: #09231f;
+  --color-accent: #e8ad34;
+  --color-accent-strong: #c98314;
+  --color-surface: #f6f3ea;
+  --color-surface-raised: #ffffff;
+  --color-border: #d8ddd9;
+  --color-focus: #f0b83f;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 5rem;
+  --space-10: 6rem;
+
+  --text-small: 0.875rem;
+  --text-body: 1rem;
+  --text-lead: clamp(1.125rem, 2vw, 1.375rem);
+  --text-display: clamp(3rem, 8.5vw, 7.25rem);
+
+  --radius-small: 0.5rem;
+  --radius-medium: 1rem;
+  --radius-large: 1.5rem;
+  --shadow-raised: 0 1.5rem 4rem rgb(16 24 22 / 12%);
+  --container-width: 78rem;
+  --container-gutter: clamp(1.25rem, 4vw, 3rem);
+}
