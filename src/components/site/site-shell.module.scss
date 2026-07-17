@@ -397,6 +397,10 @@
     font-size: 1.08rem;
   }
 
+  .brandText small {
+    display: none;
+  }
+
   .mobileNavInner {
     max-height: calc(100svh - 4.75rem);
   }
