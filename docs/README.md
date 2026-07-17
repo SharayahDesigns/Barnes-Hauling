@@ -18,19 +18,20 @@ These documents define the product scope and should be reviewed before implement
 12. [Photo and file documentation](requirements/12-photo-and-file-documentation.md)
 13. [Commercial accounts](requirements/13-commercial-accounts.md)
 14. [Customer-facing content](requirements/14-customer-facing-content.md)
-15. [Database schema](requirements/16-database-schema.md)
-16. [Development phases](requirements/17-development-phases.md)
-17. [Out of scope for initial release](requirements/18-out-of-scope.md)
-18. [AI agent instructions](requirements/19-ai-agent-instructions.md)
-19. [Launch success metrics](requirements/20-launch-success-metrics.md)
+15. [Technology stack](requirements/15-technology-stack.md)
+16. [Database schema](requirements/16-database-schema.md)
+17. [Development phases](requirements/17-development-phases.md)
+18. [Out of scope for initial release](requirements/18-out-of-scope.md)
+19. [AI agent instructions](requirements/19-ai-agent-instructions.md)
+20. [Launch success metrics](requirements/20-launch-success-metrics.md)
 
 ## Reference material
 
 - [Dumpster rental rates and terms](reference/dumpster-rental-rates-and-terms.pdf)
 
-## Known gap
+## Requirements coverage
 
-The supplied document set does not currently include section `15`. Its absence should be resolved before implementing features that may depend on it. Do not invent missing business, legal, service-area, or operational requirements.
+The numbered requirement set is complete from sections `01` through `20`. Do not invent business, legal, service-area, pricing, or operational details that the documents do not explicitly define.
 
 ## Change discipline
 
