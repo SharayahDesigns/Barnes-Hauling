@@ -62,8 +62,14 @@ docs/
   requirements/    Product, operational, security, and release requirements
 public/images/     Public brand and marketing assets
 src/app/           Next.js routes and global styles
+src/config/        Typed business facts, service definitions, and site routes
 src/lib/supabase/  Browser and server Supabase clients
 ```
+
+Business facts that have not been confirmed are represented as typed `pending`
+values in `src/config/business.ts`. Public UI must check that status rather than
+inventing or publishing a placeholder as a real phone number, service area,
+price, policy, or trust claim.
 
 See [docs/README.md](docs/README.md) for the requirements index and identified documentation gaps.
 
