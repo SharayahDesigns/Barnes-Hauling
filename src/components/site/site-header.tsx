@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { primaryNavigation, serviceNavigation, siteRoutes } from "@/config/site";
+import { primaryNavigation, siteRoutes } from "@/config/site";
 
 import { Brand } from "./brand";
 import styles from "./site-shell.module.scss";
@@ -38,17 +38,7 @@ export function SiteHeader() {
         <Brand />
 
         <nav className={styles.desktopNav} aria-label="Primary navigation">
-          <details className={styles.servicesMenu}>
-            <summary>Services</summary>
-            <div className={styles.servicesPanel}>
-              {serviceNavigation.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <strong>{item.label}</strong>
-                  <span>{item.description}</span>
-                </Link>
-              ))}
-            </div>
-          </details>
+          <Link href="/#dumpster-info">Services</Link>
           {primaryNavigation.map((item) => (
             <Link key={item.href} href={item.href}>
               {item.label}
@@ -87,18 +77,9 @@ export function SiteHeader() {
         hidden={!isOpen}
       >
         <div className={styles.mobileNavInner}>
-          <p>Services</p>
-          {serviceNavigation.map((item, index) => (
-            <Link
-              ref={index === 0 ? firstLinkRef : undefined}
-              key={item.href}
-              href={item.href}
-              onClick={closeMenu}
-            >
-              {item.label}
-            </Link>
-          ))}
-          <div className={styles.mobileDivider} />
+          <Link ref={firstLinkRef} href="/#dumpster-info" onClick={closeMenu}>
+            Services
+          </Link>
           {primaryNavigation.map((item) => (
             <Link key={item.href} href={item.href} onClick={closeMenu}>
               {item.label}

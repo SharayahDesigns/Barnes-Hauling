@@ -55,6 +55,129 @@ export function ClockIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function StarIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable={false}
+      {...props}
+    >
+      <path d="m12 2 2.9 6.26 6.1.5-4.6 4.02 1.4 6.72L12 16.9 6.2 19.5l1.4-6.72L3 8.76l6.1-.5z" />
+    </svg>
+  );
+}
+
+export function AlertTriangleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M12 3 2 20h20z" />
+      <path d="M12 10v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+export function HouseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M4 11 12 4l8 7" />
+      <path d="M6 10v9h12v-9" />
+      <path d="M10 19v-5h4v5" />
+    </svg>
+  );
+}
+
+export function MoundIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable={false}
+      {...props}
+    >
+      <circle cx="7.5" cy="16" r="3" />
+      <circle cx="16.5" cy="16" r="3" />
+      <circle cx="12" cy="10.5" r="3" />
+    </svg>
+  );
+}
+
+export function WeightIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M9 8a3 3 0 0 1 6 0" />
+      <path d="M7 8h10l1.2 10a2 2 0 0 1-2 2.2H7.8a2 2 0 0 1-2-2.2z" />
+    </svg>
+  );
+}
+
+export function CheckCircleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      focusable={false}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <path
+        d="m8 12 2.5 2.5L16 9"
+        stroke="#fff"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function RepeatIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </svg>
+  );
+}
+
+export function ClipboardIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" />
+      <path d="m8.4 11 1 1 2-2" />
+      <path d="m8.4 16 1 1 2-2" />
+      <path d="M14.5 11.5H16M14.5 16.5H16" />
+    </svg>
+  );
+}
+
+export function UsersIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 5.2a3 3 0 0 1 0 5.6" />
+      <path d="M18 20a6.5 6.5 0 0 0-3-5.5" />
+    </svg>
+  );
+}
+
+export function ThumbsUpIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="M7 10v11" />
+      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
+    </svg>
+  );
+}
+
 export function HelpIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...baseProps} {...props}>
@@ -175,6 +298,29 @@ export function MailIcon(props: SVGProps<SVGSVGElement>) {
     <svg {...baseProps} {...props}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="m3 7 9 6 9-6" />
+    </svg>
+  );
+}
+
+export function MountainIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...baseProps} {...props}>
+      <path d="m2 20 6-11 4 7 3-5 7 9z" />
+    </svg>
+  );
+}
+
+export function MapMarkerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable={false}
+      {...props}
+    >
+      <path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7z" />
+      <circle cx="12" cy="9" r="2.6" fill="#fff" />
     </svg>
   );
 }

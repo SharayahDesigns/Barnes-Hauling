@@ -41,7 +41,7 @@ export const serviceNavigation = [
 
 export const primaryNavigation = [
   { label: "Dumpster Rentals", href: siteRoutes.dumpsterRental },
-  { label: "Service Areas", href: siteRoutes.serviceAreas },
+  { label: "Service Areas", href: "/#service-area" },
   { label: "About", href: siteRoutes.about },
   { label: "FAQ", href: siteRoutes.faq },
   { label: "Contact", href: siteRoutes.contact },

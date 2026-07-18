@@ -2,11 +2,18 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { businessConfig } from "@/config/business";
+import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
 import type { DumpsterRate, PublicAction } from "@/config/public-content";
 import { formatCents } from "@/config/public-content";
 import { siteRoutes } from "@/config/site";
 
+import {
+  CalendarIcon,
+  CheckCircleIcon,
+  HouseIcon,
+  MoundIcon,
+  WeightIcon,
+} from "./icons";
 import styles from "./marketing.module.scss";
 
 export type HeroHighlight = Readonly<{
@@ -148,12 +155,18 @@ export function SectionIntro({
 }
 
 export function DumpsterCard({ rate }: Readonly<{ rate: DumpsterRate }>) {
+  const isHeavy = rate.use.toLowerCase().includes("heavy");
+  const phone = businessConfig.contact.phone;
+
   return (
     <article className={styles.priceCard}>
       <div className={styles.priceCardTop}>
-        <p>{rate.use}</p>
-        <span>{rate.size}</span>
+        <span className={styles.priceCardIcon} aria-hidden="true">
+          {isHeavy ? <MoundIcon /> : <HouseIcon />}
+        </span>
+        <span className={styles.priceCardSize}>{rate.size}</span>
       </div>
+      <p className={styles.priceCardUse}>{rate.use}</p>
       <h3>
         {rate.price.type === "fixed"
           ? formatCents(rate.price.amountCents)
@@ -162,22 +175,43 @@ export function DumpsterCard({ rate }: Readonly<{ rate: DumpsterRate }>) {
       <p className={styles.dimensions}>{rate.dimensions}</p>
       <dl className={styles.rateFacts}>
         <div>
+          <span className={styles.rateFactIcon} aria-hidden="true">
+            <CalendarIcon />
+          </span>
           <dt>Rental</dt>
           <dd>{rate.rentalDays} days</dd>
         </div>
         <div>
+          <span className={styles.rateFactIcon} aria-hidden="true">
+            <WeightIcon />
+          </span>
           <dt>Included</dt>
           <dd>{rate.includedTons} tons</dd>
         </div>
       </dl>
-      <ul className={styles.checkList}>
+      <ul className={`${styles.checkList} ${styles.priceChecks}`}>
         {rate.materialRules.map((rule) => (
-          <li key={rule}>{rule}</li>
+          <li key={rule}>
+            <span className={styles.checkIcon} aria-hidden="true">
+              <CheckCircleIcon />
+            </span>
+            {rule}
+          </li>
         ))}
       </ul>
-      <Link className={styles.cardLink} href={rate.href}>
-        Review this option <span aria-hidden="true">→</span>
-      </Link>
+      <div className={styles.priceCardActions}>
+        <Link className={styles.priceCardButton} href={siteRoutes.book}>
+          Book Online
+        </Link>
+        {isConfirmedBusinessFact(phone) ? (
+          <a
+            className={`${styles.priceCardButton} ${styles.priceCardButtonDark}`}
+            href={`tel:${phone.value}`}
+          >
+            Call To Book
+          </a>
+        ) : null}
+      </div>
     </article>
   );
 }
