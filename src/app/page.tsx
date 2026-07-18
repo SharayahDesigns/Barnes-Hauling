@@ -9,10 +9,18 @@ import {
   SectionIntro,
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
+import {
+  CalendarIcon,
+  ClockIcon,
+  HandshakeIcon,
+  PineIcon,
+  ShieldCheckIcon,
+  TagIcon,
+} from "@/components/marketing/icons";
 import { businessConfig } from "@/config/business";
 import {
   dumpsterRates,
-  publicFaqs,
+  homepageFaqs,
   publicProcess,
 } from "@/config/public-content";
 import { siteRoutes } from "@/config/site";
@@ -30,20 +38,36 @@ export default function Home() {
       <PageHero
         showBrandLogo
         eyebrow="Hauling & disposal, without the guesswork"
-        title="The heavy work, clearly planned."
-        summary="Choose full-service hauling when you want the loading handled, or plan a dumpster rental when your project needs room to work. Confirmed rates and restrictions are shown up front."
-        primaryAction={{ label: "Get a Quote", href: siteRoutes.quote }}
-        secondaryAction={{ label: "Compare Dumpsters", href: siteRoutes.dumpsterRental }}
-        aside={
-          <div className={styles.detailCard}>
-            <p className={styles.eyebrow}>Confirmed rate-sheet option</p>
-            <h3>15-yard residential</h3>
-            <p>$275 · five days · three tons included</p>
-            <Link className={styles.textLink} href={siteRoutes.dumpster15}>
-              Review the loading rules <span aria-hidden="true">→</span>
-            </Link>
-          </div>
+        eyebrowIcon={<PineIcon />}
+        title={
+          <>
+            The heavy work.{" "}
+            <span className={styles.titleAccent}>Clearly planned.</span>
+          </>
         }
+        summary="Reliable hauling and dumpster rentals for projects of any size. On time, upfront pricing, and zero surprises."
+        slideInImage={{ src: "/images/dump.webp", width: 1316, height: 545 }}
+        primaryAction={{ label: "Book a Dumpster", href: siteRoutes.book }}
+        primaryIcon={<CalendarIcon />}
+        secondaryAction={{ label: "Get a Quote", href: siteRoutes.quote }}
+        secondaryIcon={<TagIcon />}
+        highlights={[
+          {
+            icon: <ShieldCheckIcon />,
+            title: "Upfront Pricing",
+            text: "No hidden fees",
+          },
+          {
+            icon: <ClockIcon />,
+            title: "On-Time Service",
+            text: "We show up ready",
+          },
+          {
+            icon: <HandshakeIcon />,
+            title: "Local & Trusted",
+            text: "Serving our community",
+          },
+        ]}
       />
 
       <section className={styles.section}>
@@ -167,7 +191,7 @@ export default function Home() {
             eyebrow="Common questions"
             title="Know the important rental details before the next step."
           />
-          <FaqList faqs={publicFaqs.slice(0, 4)} />
+          <FaqList faqs={homepageFaqs.slice(0, 4)} />
           <Link className={styles.textLink} href={siteRoutes.faq}>
             Read all frequently asked questions <span aria-hidden="true">→</span>
           </Link>

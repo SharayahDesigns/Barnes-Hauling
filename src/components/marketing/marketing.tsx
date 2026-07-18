@@ -2,63 +2,129 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { businessConfig } from "@/config/business";
 import type { DumpsterRate, PublicAction } from "@/config/public-content";
 import { formatCents } from "@/config/public-content";
 import { siteRoutes } from "@/config/site";
 
 import styles from "./marketing.module.scss";
 
+export type HeroHighlight = Readonly<{
+  icon: ReactNode;
+  title: string;
+  text: string;
+}>;
+
 export function PageHero({
   eyebrow,
+  eyebrowIcon,
   title,
   summary,
   primaryAction,
+  primaryIcon,
   secondaryAction,
+  secondaryIcon,
   aside,
+  highlights,
+  slideInImage,
   showBrandLogo = false,
 }: Readonly<{
   eyebrow: string;
-  title: string;
+  eyebrowIcon?: ReactNode;
+  title: ReactNode;
   summary: string;
   primaryAction?: PublicAction;
+  primaryIcon?: ReactNode;
   secondaryAction?: PublicAction;
+  secondaryIcon?: ReactNode;
   aside?: ReactNode;
+  highlights?: readonly HeroHighlight[];
+  slideInImage?: Readonly<{
+    src: string;
+    width: number;
+    height: number;
+  }>;
   showBrandLogo?: boolean;
 }>) {
   return (
-    <section
-      className={`${styles.pageHero} ${showBrandLogo ? styles.brandedPageHero : ""}`}
-      aria-labelledby="page-title"
-    >
-      <div className={styles.heroGrid}>
+    <section className={styles.pageHero} aria-labelledby="page-title">
+      {slideInImage ? (
+        <div className={styles.heroSlideImage} aria-hidden="true">
+          <Image
+            src={slideInImage.src}
+            alt=""
+            width={slideInImage.width}
+            height={slideInImage.height}
+            priority
+          />
+        </div>
+      ) : null}
+      <div className={`${styles.heroGrid} ${aside ? "" : styles.heroGridSingle}`}>
         <div className={styles.heroContent}>
           {showBrandLogo ? (
-            <div className={styles.heroBrandLogo}>
+            <div className={styles.heroBrand}>
               <Image
-                src="/images/Logo-header.webp"
-                alt="Barnes Hauling and Disposal"
-                width={761}
-                height={328}
+                className={styles.heroBrandDeer}
+                src="/images/whiteDeer-Logo.webp"
+                alt=""
+                width={800}
+                height={497}
                 priority
               />
+              <span className={styles.heroBrandText}>
+                <strong>{businessConfig.identity.shortName.value}</strong>
+                <small>Hauling &amp; Disposal</small>
+              </span>
             </div>
           ) : null}
-          <p className={styles.eyebrow}>{eyebrow}</p>
+          <p className={styles.eyebrow}>
+            {eyebrowIcon ? (
+              <span className={styles.eyebrowIcon} aria-hidden="true">
+                {eyebrowIcon}
+              </span>
+            ) : null}
+            {eyebrow}
+          </p>
           <h1 id="page-title">{title}</h1>
           <p className={styles.heroSummary}>{summary}</p>
           {primaryAction || secondaryAction ? (
             <div className={styles.actions}>
               {primaryAction ? (
                 <Link className={styles.primaryButton} href={primaryAction.href}>
+                  {primaryIcon ? (
+                    <span className={styles.buttonIcon} aria-hidden="true">
+                      {primaryIcon}
+                    </span>
+                  ) : null}
                   {primaryAction.label}
                 </Link>
               ) : null}
               {secondaryAction ? (
                 <Link className={styles.secondaryButton} href={secondaryAction.href}>
+                  {secondaryIcon ? (
+                    <span className={styles.buttonIcon} aria-hidden="true">
+                      {secondaryIcon}
+                    </span>
+                  ) : null}
                   {secondaryAction.label}
                 </Link>
               ) : null}
             </div>
+          ) : null}
+          {highlights && highlights.length > 0 ? (
+            <ul className={styles.heroHighlights}>
+              {highlights.map((item) => (
+                <li className={styles.heroHighlight} key={item.title}>
+                  <span className={styles.heroHighlightIcon} aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <span className={styles.heroHighlightText}>
+                    <strong>{item.title}</strong>
+                    <span>{item.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
         {aside ? <div className={styles.heroAside}>{aside}</div> : null}
@@ -129,7 +195,7 @@ export function CtaBand({
 }: Readonly<{
   eyebrow?: string;
   title: string;
-  text: string;
+  text?: string;
   primary?: PublicAction;
   secondary?: PublicAction;
 }>) {
@@ -138,7 +204,7 @@ export function CtaBand({
       <div>
         <p className={styles.eyebrow}>{eyebrow}</p>
         <h2>{title}</h2>
-        <p>{text}</p>
+        {text ? <p>{text}</p> : null}
       </div>
       <div className={styles.actions}>
         <Link className={styles.accentButton} href={primary.href}>
@@ -147,6 +213,36 @@ export function CtaBand({
         <Link className={styles.inverseButton} href={secondary.href}>
           {secondary.label}
         </Link>
+      </div>
+    </section>
+  );
+}
+
+export type ValueItem = Readonly<{
+  icon: ReactNode;
+  title: string;
+  text: string;
+}>;
+
+export function ValueBand({
+  eyebrow,
+  items,
+}: Readonly<{ eyebrow: string; items: readonly ValueItem[] }>) {
+  return (
+    <section className={styles.valueBand}>
+      <div className={styles.sectionInner}>
+        <p className={`${styles.eyebrow} ${styles.valueBandEyebrow}`}>{eyebrow}</p>
+        <ul className={styles.valueGrid}>
+          {items.map((item) => (
+            <li className={styles.valueItem} key={item.title}>
+              <span className={styles.valueIcon} aria-hidden="true">
+                {item.icon}
+              </span>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

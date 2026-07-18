@@ -1,95 +1,120 @@
+import Image from "next/image";
+import Link from "next/link";
+
 import {
   CtaBand,
-  PageHero,
-  SectionIntro,
+  ValueBand,
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
+import {
+  ClockIcon,
+  LeafIcon,
+  ShieldCheckIcon,
+  TagIcon,
+} from "@/components/marketing/icons";
 import { siteRoutes } from "@/config/site";
 import { createPageMetadata } from "@/lib/page-metadata";
 
 export const metadata = createPageMetadata(
   "About",
-  "Learn how Barnes separates hauling and dumpster rental paths and why the public site shows only verified business, pricing, and service information.",
+  "Barnes Hauling and Disposal keeps hauling and dumpster rentals simple with upfront pricing, dependable service, and responsible disposal.",
   siteRoutes.about,
 );
 
 export default function AboutPage() {
   return (
     <>
-      <PageHero
-        eyebrow="About Barnes"
-        title="A clearer front door for the heavy work."
-        summary="Barnes Hauling and Disposal is building a public service experience around two distinct needs: full-service hauling and on-site dumpster rentals."
-        primaryAction={{ label: "Explore services", href: siteRoutes.services }}
-        secondaryAction={{ label: "Read the FAQ", href: siteRoutes.faq }}
+      <section className={styles.aboutHero}>
+        <div className={styles.aboutHeroInner}>
+          <div className={styles.aboutHeroContent}>
+            <h1>
+              About{" "}
+              <span className={styles.aboutHeroAccent}>
+                Barnes Hauling &amp; Disposal
+              </span>
+            </h1>
+            <span className={styles.aboutHeroRule} aria-hidden="true" />
+            <p className={styles.aboutHeroTagline}>
+              Local. Reliable. Straightforward.
+            </p>
+            <p className={styles.aboutHeroText}>
+              Barnes Hauling and Disposal was built on the belief that renting a
+              dumpster should be simple. We focus on upfront pricing, dependable
+              scheduling, and the kind of service we&apos;d expect for our own
+              projects.
+            </p>
+          </div>
+        </div>
+        <div className={styles.aboutHeroImage}>
+          <Image
+            src="/images/mountainanddump.webp"
+            alt="A Barnes dump truck on a mountain road"
+            width={1854}
+            height={848}
+            priority
+          />
+        </div>
+      </section>
+
+      <ValueBand
+        eyebrow="What we stand for"
+        items={[
+          {
+            icon: <ShieldCheckIcon />,
+            title: "Reliable Service",
+            text: "We show up when we say we will and work to get the job done right.",
+          },
+          {
+            icon: <TagIcon />,
+            title: "Upfront Pricing",
+            text: "Clear rates with no hidden fees or surprise charges.",
+          },
+          {
+            icon: <ClockIcon />,
+            title: "On-Time Delivery",
+            text: "Your time matters. We plan deliveries around your schedule.",
+          },
+          {
+            icon: <LeafIcon />,
+            title: "Responsible Disposal",
+            text: "We follow local guidelines and dispose of waste the right way.",
+          },
+        ]}
       />
 
       <section className={styles.section}>
         <div className={styles.sectionInner}>
-          <div className={styles.splitGrid}>
-            <div className={styles.prose}>
-              <h2>Useful information first. Operational promises second.</h2>
-              <p>
-                This marketing foundation is designed to help customers choose
-                the right service and understand confirmed dumpster terms. It
-                does not publish unverified coverage, availability, business
-                history, credentials, reviews, or guarantees.
-              </p>
-              <p>
-                As Barnes confirms those facts, typed business configuration
-                can make them available consistently across the site without
-                duplicating or drifting content.
-              </p>
+          <div className={styles.aboutSplit}>
+            <div className={styles.aboutSplitImage}>
+              <iframe
+                className={styles.aboutMap}
+                src="https://www.google.com/maps?q=Herriman,+Utah&output=embed"
+                title="Map of Herriman, Utah — part of the Barnes Hauling and Disposal service area"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
             </div>
-            <div className={styles.detailGrid}>
-              <article className={styles.detailCard}>
-                <h3>Hauling</h3>
-                <p>
-                  A reviewed estimate path for projects shaped by labor,
-                  volume, weight, access, disposal, and handling details.
-                </p>
-              </article>
-              <article className={styles.detailCard}>
-                <h3>Dumpster rentals</h3>
-                <p>
-                  A container path shaped by size, material, location,
-                  duration, included weight, restrictions, and availability.
-                </p>
-              </article>
+            <div className={styles.aboutSplitContent}>
+              <p className={styles.eyebrow}>Who we are</p>
+              <h2>A local company you can count on</h2>
+              <p>
+                We&apos;re a local hauling and disposal company serving
+                homeowners, contractors, and businesses across the communities
+                we cover. Whether you&apos;re cleaning out a garage, remodeling
+                your home, or managing a job site, we help you get the right
+                dumpster and the right team.
+              </p>
+              <Link className={styles.outlineButton} href={siteRoutes.services}>
+                Get to Know Us
+              </Link>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.surfaceSection}>
-        <div className={styles.sectionInner}>
-          <SectionIntro
-            eyebrow="What is verified today"
-            title="A deliberately short list of public facts."
-          />
-          <div className={styles.trustGrid}>
-            <article className={styles.trustCard}>
-              <span aria-hidden="true">B</span>
-              <h3>Business identity</h3>
-              <p>Barnes Hauling and Disposal is the confirmed business name.</p>
-            </article>
-            <article className={styles.trustCard}>
-              <span aria-hidden="true">2</span>
-              <h3>Two service models</h3>
-              <p>The platform supports hauling and junk removal plus dumpster rentals.</p>
-            </article>
-            <article className={styles.trustCard}>
-              <span aria-hidden="true">15</span>
-              <h3>Supplied rental facts</h3>
-              <p>15-yard and 22-yard dimensions, rates, terms, and restrictions come from the provided sheet.</p>
-            </article>
           </div>
         </div>
       </section>
 
       <CtaBand
-        title="Choose the path that fits the project."
-        text="Compare the service models or review the information needed for a future quote request."
+        eyebrow="Ready to get started?"
+        title="Get a quote or book your dumpster today."
       />
     </>
   );

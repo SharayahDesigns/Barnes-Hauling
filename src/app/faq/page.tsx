@@ -1,43 +1,77 @@
-import {
-  CtaBand,
-  FaqList,
-  PageHero,
-  SectionIntro,
-  marketingStyles as styles,
-} from "@/components/marketing/marketing";
+import Image from "next/image";
+import Link from "next/link";
+
+import { FaqExplorer } from "@/components/marketing/faq-explorer";
+import { DumpsterIcon } from "@/components/marketing/icons";
+import { marketingStyles as styles } from "@/components/marketing/marketing";
+import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
 import { publicFaqs } from "@/config/public-content";
 import { siteRoutes } from "@/config/site";
 import { createPageMetadata } from "@/lib/page-metadata";
 
 export const metadata = createPageMetadata(
   "Frequently asked questions",
-  "Get clear answers about Barnes dumpster rental periods, included weight, material restrictions, specialty fees, quote-required pricing, and booking status.",
+  "Find quick answers about Barnes dumpster rentals, pricing, accepted items, and policies. Confirmed details only — unverified items stay clearly pending.",
   siteRoutes.faq,
 );
 
 export default function FaqPage() {
+  const phone = businessConfig.contact.phone;
+
   return (
     <>
-      <PageHero
-        eyebrow="Frequently asked questions"
-        title="The known details, without filling in the blanks."
-        summary="Answers are limited to the project requirements and supplied dumpster rate sheet. Unconfirmed policies, coverage, availability, and charges stay clearly pending."
-        primaryAction={{ label: "Compare dumpsters", href: siteRoutes.dumpsterRental }}
-        secondaryAction={{ label: "Explore services", href: siteRoutes.services }}
-      />
-      <section className={styles.section}>
-        <div className={styles.sectionInner}>
-          <SectionIntro
-            eyebrow="Rental and process answers"
-            title="Start with the questions that affect the load and total."
+      <section className={styles.aboutHero}>
+        <div className={styles.aboutHeroInner}>
+          <div className={styles.aboutHeroContent}>
+            <h1>FAQ</h1>
+            <span className={styles.aboutHeroRule} aria-hidden="true" />
+            <p className={styles.faqHeroSubhead}>Answers to common questions.</p>
+            <p className={styles.aboutHeroText}>
+              Find quick answers about our dumpster rentals, services, and
+              policies.
+            </p>
+          </div>
+        </div>
+        <div className={styles.aboutHeroImage}>
+          <Image
+            src="/images/mountainanddump.webp"
+            alt="A Barnes dump truck on a mountain road"
+            width={1854}
+            height={848}
+            priority
           />
-          <FaqList faqs={publicFaqs} />
         </div>
       </section>
-      <CtaBand
-        title="Still deciding between hauling and a dumpster?"
-        text="Compare both service paths before reviewing the quote or booking entry page."
-      />
+
+      <section className={styles.section}>
+        <div className={styles.sectionInner}>
+          <FaqExplorer faqs={publicFaqs} />
+        </div>
+      </section>
+
+      <section className={styles.faqCta}>
+        <div className={styles.faqCtaInner}>
+          <span className={styles.faqCtaIcon} aria-hidden="true">
+            <DumpsterIcon />
+          </span>
+          <div className={styles.faqCtaText}>
+            <h2>Still have questions?</h2>
+            <p>
+              We&apos;re here to help. Give us a call or request a quote today.
+            </p>
+          </div>
+          <div className={styles.faqCtaActions}>
+            <Link className={styles.inverseButton} href={siteRoutes.quote}>
+              Get a Quote
+            </Link>
+            {isConfirmedBusinessFact(phone) ? (
+              <a className={styles.accentButton} href={`tel:${phone.value}`}>
+                Call Us Now
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </section>
     </>
   );
 }

@@ -83,11 +83,11 @@ export const businessConfig: BusinessConfig = {
     },
   },
   contact: {
-    phone: pendingFact("Phone number pending business confirmation", [
-      "call actions",
-      "customer support",
-      "transactional messages",
-    ]),
+    phone: {
+      status: "confirmed",
+      value: "385-246-4219",
+      source: "business-owner",
+    },
     email: {
       status: "confirmed",
       value: "barneshaulingdisposal@gmail.com",
@@ -99,10 +99,15 @@ export const businessConfig: BusinessConfig = {
     ),
   },
   operations: {
-    serviceAreas: pendingFact(
-      "Service areas and validation rules pending business confirmation",
-      ["service-area pages", "quote eligibility", "booking eligibility"],
-    ),
+    serviceAreas: {
+      status: "confirmed",
+      value: [
+        "Herriman",
+        "Southwest Salt Lake County",
+        "Northern Utah County",
+      ],
+      source: "business-owner",
+    },
     businessHours: pendingFact(
       "Business hours pending business confirmation",
       ["site footer", "contact expectations", "scheduling"],
