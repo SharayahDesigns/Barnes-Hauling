@@ -1,3 +1,5 @@
+import { siteRoutes } from "./site";
+
 export type BusinessFactSource =
   | "project-requirements"
   | "business-owner"
@@ -22,10 +24,12 @@ export type ServiceKey = "hauling" | "dumpster-rental";
 
 export type ServiceDefinition = Readonly<{
   key: ServiceKey;
+  eyebrow: string;
   name: string;
   shortName: string;
   href: string;
   summary: string;
+  marketingAction: string;
   primaryAction: Readonly<{
     label: string;
     href: string;
@@ -65,7 +69,7 @@ const pendingFact = (
   requiredFor,
 });
 
-export const businessConfig = {
+export const businessConfig: BusinessConfig = {
   identity: {
     name: {
       status: "confirmed",
@@ -84,11 +88,11 @@ export const businessConfig = {
       "customer support",
       "transactional messages",
     ]),
-    email: pendingFact("Email address pending business confirmation", [
-      "contact forms",
-      "customer support",
-      "transactional messages",
-    ]),
+    email: {
+      status: "confirmed",
+      value: "barneshaulingdisposal@gmail.com",
+      source: "business-owner",
+    },
     publicAddress: pendingFact(
       "Public business address pending business confirmation",
       ["contact page", "local business metadata"],
@@ -125,30 +129,34 @@ export const businessConfig = {
   services: [
     {
       key: "hauling",
+      eyebrow: "We load it",
       name: "Hauling and junk removal",
       shortName: "Hauling",
-      href: "/services/hauling-and-junk-removal",
+      href: siteRoutes.junkRemoval,
       summary:
         "Request an estimate for item pickup, cleanouts, and other hauling projects.",
+      marketingAction: "Explore junk removal",
       primaryAction: {
         label: "Request a hauling quote",
-        href: "/quote/hauling",
+        href: siteRoutes.quote,
       },
     },
     {
       key: "dumpster-rental",
+      eyebrow: "You load it",
       name: "Dumpster rentals",
       shortName: "Dumpster rentals",
-      href: "/services/dumpster-rentals",
+      href: siteRoutes.dumpsterRental,
       summary:
         "Plan a container rental by project type, debris, placement, and schedule.",
+      marketingAction: "Compare dumpsters",
       primaryAction: {
         label: "Plan a dumpster rental",
-        href: "/book/dumpster",
+        href: siteRoutes.book,
       },
     },
   ],
-} as const satisfies BusinessConfig;
+};
 
 export function isConfirmedBusinessFact<T>(
   fact: BusinessFact<T>,

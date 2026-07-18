@@ -1,17 +1,26 @@
 :root {
-  // Provisional brand palette. Keep semantic usage stable if colors change.
-  --color-ink: #101816;
-  --color-text: #1d2926;
-  --color-text-muted: #5f6e69;
+  --color-ink: #0b0c0a;
+  --color-charcoal: #191b18;
+  --color-text: #191b18;
+  --color-text-muted: #62675f;
   --color-text-inverse: #ffffff;
-  --color-brand: #173f35;
-  --color-brand-deep: #09231f;
-  --color-accent: #e8ad34;
-  --color-accent-strong: #c98314;
-  --color-surface: #f6f3ea;
+  --color-brand: #4e6a2a;
+  --color-brand-deep: #33481b;
+  --color-brand-soft: #7e9552;
+  --color-accent: var(--color-brand);
+  --color-accent-strong: var(--color-brand-deep);
+  --color-surface: #f7f7f4;
+  --color-surface-muted: #ecede9;
   --color-surface-raised: #ffffff;
-  --color-border: #d8ddd9;
-  --color-focus: #f0b83f;
+  --color-surface-warm: var(--color-surface-muted);
+  --color-border: #c9cdc5;
+  --color-focus: #7e9552;
+  --color-danger: #a33a32;
+  --color-success: #3f672b;
+
+  --font-display: "Anton", Impact, Haettenschweiler, sans-serif;
+  --font-heading: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Barlow", Arial, Helvetica, sans-serif;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -29,10 +38,12 @@
   --text-lead: clamp(1.125rem, 2vw, 1.375rem);
   --text-display: clamp(3rem, 8.5vw, 7.25rem);
 
-  --radius-small: 0.5rem;
-  --radius-medium: 1rem;
-  --radius-large: 1.5rem;
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --radius-small: var(--radius-control);
+  --radius-medium: var(--radius-card);
+  --radius-large: 1rem;
   --shadow-raised: 0 1.5rem 4rem rgb(16 24 22 / 12%);
-  --container-width: 78rem;
-  --container-gutter: clamp(1.25rem, 4vw, 3rem);
+  --container-width: 80rem;
+  --container-gutter: clamp(1rem, 4vw, 3rem);
 }
