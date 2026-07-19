@@ -145,6 +145,7 @@
   display: grid;
   gap: var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  margin-bottom: var(--space-6);
 }
 
 .statCard {

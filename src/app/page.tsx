@@ -333,7 +333,7 @@ export default function Home() {
             <div className={styles.svcMap}>
               <iframe
                 className={styles.svcMapFrame}
-                src="https://maps.google.com/maps?q=Herriman,+Utah&z=9&output=embed"
+                src="https://maps.google.com/maps?q=40.5141,-112.0330(Herriman)&ll=40.5141,-112.0330&z=10&output=embed"
                 title="Map of the Barnes Hauling and Disposal delivery area around Herriman, Utah"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
