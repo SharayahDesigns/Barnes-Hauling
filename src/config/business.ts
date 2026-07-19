@@ -142,8 +142,8 @@ export const businessConfig: BusinessConfig = {
         "Request an estimate for item pickup, cleanouts, and other hauling projects.",
       marketingAction: "Explore junk removal",
       primaryAction: {
-        label: "Request a hauling quote",
-        href: siteRoutes.quote,
+        label: "Explore junk removal",
+        href: siteRoutes.junkRemoval,
       },
     },
     {

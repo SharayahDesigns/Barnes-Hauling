@@ -54,6 +54,23 @@ npm run typecheck
 npm run build
 ```
 
+## Resend email setup
+
+Barnes uses Resend for transactional email delivery from the app. Set up email before enabling live contact or booking notifications:
+
+1. Create a Resend account and API key.
+2. Verify a Barnes-controlled sending domain or subdomain in Resend. A subdomain such as `mail.yourdomain.com` is recommended.
+3. Add the Resend variables from [.env.example](/Users/sharayahhefner/Desktop/Barnes-Hauling/.env.example:1) to `.env.local`.
+4. Point `RESEND_FROM_EMAIL` at the verified domain. This must not use the public Gmail address as the sender.
+5. Set `RESEND_CONTACT_TO_EMAIL` and `RESEND_BOOKING_TO_EMAIL` to the inbox Barnes should monitor.
+6. Register a Resend webhook that targets `/api/webhooks/resend` and store its signing secret in `RESEND_WEBHOOK_SECRET`.
+
+Current application usage:
+
+- Contact-form submissions send an internal Barnes notification and a customer acknowledgement.
+- Dumpster booking draft submissions send an internal request alert and a customer confirmation.
+- The webhook route verifies Resend signatures and is ready for delivery-event persistence once notification history tables are wired into the app layer.
+
 ## Project structure
 
 ```text

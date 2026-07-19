@@ -224,8 +224,8 @@ export function CtaBand({
   eyebrow = "Plan the next step",
   title,
   text,
-  primary = { label: "Get a Quote", href: siteRoutes.quote },
-  secondary = { label: "Book a Dumpster", href: siteRoutes.book },
+  primary = { label: "Book a Dumpster", href: siteRoutes.book },
+  secondary,
 }: Readonly<{
   eyebrow?: string;
   title: string;
@@ -233,6 +233,9 @@ export function CtaBand({
   primary?: PublicAction;
   secondary?: PublicAction;
 }>) {
+  const phone = businessConfig.contact.phone;
+  const callHref = isConfirmedBusinessFact(phone) ? `tel:${phone.value}` : null;
+
   return (
     <section className={styles.ctaBand}>
       <div>
@@ -244,9 +247,15 @@ export function CtaBand({
         <Link className={styles.accentButton} href={primary.href}>
           {primary.label}
         </Link>
-        <Link className={styles.inverseButton} href={secondary.href}>
-          {secondary.label}
-        </Link>
+        {secondary ? (
+          <Link className={styles.inverseButton} href={secondary.href}>
+            {secondary.label}
+          </Link>
+        ) : callHref ? (
+          <a className={styles.inverseButton} href={callHref}>
+            Call to Book
+          </a>
+        ) : null}
       </div>
     </section>
   );

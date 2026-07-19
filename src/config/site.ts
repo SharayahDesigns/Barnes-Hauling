@@ -15,7 +15,6 @@ export const siteRoutes = {
   about: "/about",
   faq: "/faq",
   contact: "/contact",
-  quote: "/quote",
   book: "/book",
   privacy: "/privacy",
   terms: "/terms",
@@ -70,5 +69,5 @@ export const footerNavigation = {
 >;
 
 export const indexableRoutes = Object.values(siteRoutes).filter(
-  (route) => route !== siteRoutes.quote && route !== siteRoutes.book,
+  (route) => route !== siteRoutes.book,
 );

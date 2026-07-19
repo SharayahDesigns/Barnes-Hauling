@@ -114,7 +114,7 @@ export default function AboutPage() {
 
       <CtaBand
         eyebrow="Ready to get started?"
-        title="Get a quote or book your dumpster today."
+        title="Book your dumpster today."
       />
     </>
   );

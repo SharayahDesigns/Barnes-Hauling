@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
 import { primaryNavigation, siteRoutes } from "@/config/site";
 
 import { Brand } from "./brand";
 import styles from "./site-shell.module.scss";
+
+const phone = businessConfig.contact.phone;
+const callHref = isConfirmedBusinessFact(phone) ? `tel:${phone.value}` : null;
 
 export function SiteHeader() {
   const [isOpen, setIsOpen] = useState(false);
@@ -47,9 +51,11 @@ export function SiteHeader() {
         </nav>
 
         <div className={styles.headerActions}>
-          <Link className={styles.quoteAction} href={siteRoutes.quote}>
-            Get a Quote
-          </Link>
+          {callHref ? (
+            <a className={styles.quoteAction} href={callHref}>
+              Call to Book
+            </a>
+          ) : null}
           <Link className={styles.bookAction} href={siteRoutes.book}>
             Book a Dumpster
           </Link>
@@ -86,9 +92,11 @@ export function SiteHeader() {
             </Link>
           ))}
           <div className={styles.mobileActions}>
-            <Link href={siteRoutes.quote} onClick={closeMenu}>
-              Get a Quote
-            </Link>
+            {callHref ? (
+              <a href={callHref} onClick={closeMenu}>
+                Call to Book
+              </a>
+            ) : null}
             <Link href={siteRoutes.book} onClick={closeMenu}>
               Book a Dumpster
             </Link>

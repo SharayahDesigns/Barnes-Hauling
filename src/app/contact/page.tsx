@@ -99,10 +99,7 @@ export default function ContactPage() {
 
         {emailValue ? (
           <div className={styles.contactFormCard}>
-            <ContactForm
-              recipientEmail={emailValue}
-              serviceOptions={serviceOptions}
-            />
+            <ContactForm serviceOptions={serviceOptions} />
           </div>
         ) : null}
       </div>

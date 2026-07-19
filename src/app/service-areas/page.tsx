@@ -33,7 +33,7 @@ export default function ServiceAreasPage() {
             <SectionIntro
               eyebrow="Current status"
               title="Service-area configuration is still pending."
-              text="The database intentionally contains no active service areas. Quote and booking processing will stay inactive until Barnes confirms coverage and delivery-zone rules."
+              text="The database intentionally contains no active service areas. Booking processing will stay inactive until Barnes confirms coverage and delivery-zone rules."
             />
             <Callout>
               <h3>No city list is published yet.</h3>
@@ -71,7 +71,7 @@ export default function ServiceAreasPage() {
           </div>
           <p className={styles.notice}>
             <strong>Have a project planned?</strong>{" "}
-            <Link href={siteRoutes.quote}>Review the upcoming quote process</Link>
+            <Link href={siteRoutes.book}>Review the booking process</Link>
             {" "}and the location details it will request.
           </p>
         </div>
@@ -79,7 +79,7 @@ export default function ServiceAreasPage() {
 
       <CtaBand
         title="Start with the service, then confirm the address."
-        text="Explore both public service paths while Barnes finalizes the coverage information needed for production quoting and booking."
+        text="Explore both public service paths while Barnes finalizes the coverage information needed for production booking."
       />
     </>
   );

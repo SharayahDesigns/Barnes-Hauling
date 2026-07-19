@@ -1,49 +1,40 @@
 "use client";
 
-import { type FormEvent } from "react";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
+
+import {
+  INITIAL_CONTACT_FORM_STATE,
+  submitContactForm,
+} from "@/lib/contact/actions";
 
 import styles from "./marketing.module.scss";
 
 export function ContactForm({
-  recipientEmail,
   serviceOptions,
 }: Readonly<{
-  recipientEmail: string;
   serviceOptions: readonly string[];
 }>) {
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const data = new FormData(event.currentTarget);
-    const name = String(data.get("name") ?? "").trim();
-    const phone = String(data.get("phone") ?? "").trim();
-    const email = String(data.get("email") ?? "").trim();
-    const service = String(data.get("service") ?? "").trim();
-    const message = String(data.get("message") ?? "").trim();
-
-    const subject = name
-      ? `Website message from ${name}`
-      : "Website message";
-    const body = [
-      `Name: ${name}`,
-      `Phone: ${phone}`,
-      `Email: ${email}`,
-      `Service needed: ${service}`,
-      "",
-      message,
-    ].join("\n");
-
-    window.location.href = `mailto:${recipientEmail}?subject=${encodeURIComponent(
-      subject,
-    )}&body=${encodeURIComponent(body)}`;
-  }
+  const [state, formAction] = useActionState(
+    submitContactForm,
+    INITIAL_CONTACT_FORM_STATE,
+  );
 
   return (
-    <form className={styles.contactForm} onSubmit={handleSubmit}>
+    <form className={styles.contactForm} action={formAction}>
       <div className={styles.contactFormHeader}>
         <p className={styles.eyebrow}>Send us a message</p>
         <p>We&apos;ll get back to you as soon as we can.</p>
       </div>
+
+      <input
+        className={styles.contactHoneypot}
+        name="company"
+        type="text"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+      />
 
       <div className={styles.contactFieldRow}>
         <label className={styles.contactField}>
@@ -54,7 +45,16 @@ export function ContactForm({
             placeholder="Full Name"
             autoComplete="name"
             required
+            aria-invalid={state.fieldErrors?.name ? "true" : "false"}
+            aria-describedby={
+              state.fieldErrors?.name ? "contact-name-error" : undefined
+            }
           />
+          {state.fieldErrors?.name ? (
+            <p className={styles.contactFieldError} id="contact-name-error">
+              {state.fieldErrors.name}
+            </p>
+          ) : null}
         </label>
         <label className={styles.contactField}>
           <span className={styles.contactFieldLabel}>Phone</span>
@@ -63,7 +63,16 @@ export function ContactForm({
             type="tel"
             placeholder="Phone"
             autoComplete="tel"
+            aria-invalid={state.fieldErrors?.phone ? "true" : "false"}
+            aria-describedby={
+              state.fieldErrors?.phone ? "contact-phone-error" : undefined
+            }
           />
+          {state.fieldErrors?.phone ? (
+            <p className={styles.contactFieldError} id="contact-phone-error">
+              {state.fieldErrors.phone}
+            </p>
+          ) : null}
         </label>
       </div>
 
@@ -75,12 +84,28 @@ export function ContactForm({
           placeholder="Email"
           autoComplete="email"
           required
+          aria-invalid={state.fieldErrors?.email ? "true" : "false"}
+          aria-describedby={
+            state.fieldErrors?.email ? "contact-email-error" : undefined
+          }
         />
+        {state.fieldErrors?.email ? (
+          <p className={styles.contactFieldError} id="contact-email-error">
+            {state.fieldErrors.email}
+          </p>
+        ) : null}
       </label>
 
       <label className={styles.contactField}>
         <span className={styles.contactFieldLabel}>Service needed</span>
-        <select name="service" defaultValue="">
+        <select
+          name="service"
+          defaultValue=""
+          aria-invalid={state.fieldErrors?.service ? "true" : "false"}
+          aria-describedby={
+            state.fieldErrors?.service ? "contact-service-error" : undefined
+          }
+        >
           <option value="" disabled>
             Service Needed
           </option>
@@ -90,6 +115,11 @@ export function ContactForm({
             </option>
           ))}
         </select>
+        {state.fieldErrors?.service ? (
+          <p className={styles.contactFieldError} id="contact-service-error">
+            {state.fieldErrors.service}
+          </p>
+        ) : null}
       </label>
 
       <label className={styles.contactField}>
@@ -99,12 +129,42 @@ export function ContactForm({
           rows={4}
           placeholder="How can we help?"
           required
+          aria-invalid={state.fieldErrors?.message ? "true" : "false"}
+          aria-describedby={
+            state.fieldErrors?.message ? "contact-message-error" : undefined
+          }
         />
+        {state.fieldErrors?.message ? (
+          <p className={styles.contactFieldError} id="contact-message-error">
+            {state.fieldErrors.message}
+          </p>
+        ) : null}
       </label>
 
-      <button className={styles.contactSubmit} type="submit">
-        Send Message
-      </button>
+      {state.message ? (
+        <p
+          className={
+            state.status === "success"
+              ? styles.contactFormSuccess
+              : styles.contactFormError
+          }
+          role={state.status === "success" ? "status" : "alert"}
+        >
+          {state.message}
+        </p>
+      ) : null}
+
+      <SubmitButton />
     </form>
+  );
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button className={styles.contactSubmit} type="submit" disabled={pending}>
+      {pending ? "Sending…" : "Send Message"}
+    </button>
   );
 }

@@ -277,7 +277,13 @@
 
 .footer {
   color: rgb(255 255 255 / 72%);
-  background: var(--color-ink);
+  background-color: var(--color-ink);
+  background-image:
+    linear-gradient(rgb(11 12 10 / 82%), rgb(11 12 10 / 94%)),
+    url("/images/mountain-bg.webp");
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .footerInner,

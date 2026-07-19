@@ -12,7 +12,7 @@ import { createPageMetadata } from "@/lib/page-metadata";
 
 export const metadata = createPageMetadata(
   "Services",
-  "Compare Barnes hauling and junk removal with dumpster rental service paths before starting a quote or rental plan.",
+  "Compare Barnes hauling and junk removal with dumpster rental service paths before booking your container.",
   siteRoutes.services,
 );
 
@@ -23,7 +23,7 @@ export default function ServicesPage() {
         eyebrow="Services"
         title="One cleanup. Two ways to get it moving."
         summary="Choose full-service hauling when the project needs labor and an estimate, or a dumpster rental when you want a container on site and time to load."
-        primaryAction={{ label: "Get a Quote", href: siteRoutes.quote }}
+        primaryAction={{ label: "Book a Dumpster", href: siteRoutes.book }}
         secondaryAction={{ label: "Compare Dumpsters", href: siteRoutes.dumpsterRental }}
       />
       <section className={styles.section}>
@@ -49,8 +49,7 @@ export default function ServicesPage() {
       </section>
       <CtaBand
         title="Not sure which path fits?"
-        text="Use the quote entry page to see which project details will help Barnes review the work when quote processing opens."
-        secondary={{ label: "Review rental options", href: siteRoutes.dumpsterRental }}
+        text="Book a dumpster online, or call and we'll help you pick the right container for the job."
       />
     </>
   );

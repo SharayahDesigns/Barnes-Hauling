@@ -3,6 +3,7 @@ import {
   PageHero,
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
+import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
 import { siteRoutes } from "@/config/site";
 import { createPageMetadata } from "@/lib/page-metadata";
 
@@ -13,13 +14,18 @@ export const metadata = createPageMetadata(
 );
 
 export default function JunkRemovalPage() {
+  const phone = businessConfig.contact.phone;
+  const primaryAction = isConfirmedBusinessFact(phone)
+    ? { label: "Call to Book", href: `tel:${phone.value}` }
+    : { label: "See all services", href: siteRoutes.services };
+
   return (
     <>
       <PageHero
         eyebrow="Hauling & junk removal"
         title="When you want the loading handled."
         summary="Hauling is the better path for item pickup, cleanouts, and projects where labor, volume, weight, access, and material details need review before a price is confirmed."
-        primaryAction={{ label: "Explore the quote process", href: siteRoutes.quote }}
+        primaryAction={primaryAction}
         secondaryAction={{ label: "See all services", href: siteRoutes.services }}
       />
       <section className={styles.section}>
@@ -62,8 +68,8 @@ export default function JunkRemovalPage() {
         </div>
       </section>
       <CtaBand
-        title="Prepare the project details now."
-        text="The quote route explains the upcoming request flow but does not submit information or create a lead yet."
+        title="Ready to clear the project?"
+        text="Call to book your hauling, or compare dumpster rentals if you'd rather load it yourself."
         secondary={{ label: "Compare dumpster rentals", href: siteRoutes.dumpsterRental }}
       />
     </>

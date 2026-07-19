@@ -48,16 +48,20 @@ export default function Home() {
         eyebrowIcon={<PineIcon />}
         title={
           <>
-            The heavy work.{" "}
-            <span className={styles.titleAccent}>Clearly planned.</span>
+            Book the right{" "}
+            <span className={styles.titleAccent}>dumpster rental</span> for your
+            project.
           </>
         }
-        summary="Reliable hauling and dumpster rentals for projects of any size. On time, upfront pricing, and zero surprises."
+        summary="Compare sizes, review confirmed pricing, and choose the container that fits your cleanup, remodel, or jobsite."
         slideInImage={{ src: "/images/dump.webp", width: 1316, height: 545 }}
-        primaryAction={{ label: "Book a Dumpster", href: siteRoutes.book }}
-        primaryIcon={<CalendarIcon />}
-        secondaryAction={{ label: "Get a Quote", href: siteRoutes.quote }}
-        secondaryIcon={<TagIcon />}
+        primaryAction={{
+          label: "Compare Dumpster Sizes",
+          href: "/#dumpster-info",
+        }}
+        primaryIcon={<TagIcon />}
+        secondaryAction={{ label: "Book a Dumpster", href: siteRoutes.book }}
+        secondaryIcon={<CalendarIcon />}
         highlights={[
           {
             icon: <ShieldCheckIcon />,
@@ -86,8 +90,8 @@ export default function Home() {
             {[
               {
                 icon: <TagIcon />,
-                title: "Get a quote",
-                text: "Choose a dumpster size or tell us about your project for upfront pricing.",
+                title: "Pick your size",
+                text: "Compare dumpster sizes and confirmed pricing to find the right fit.",
               },
               {
                 icon: <CalendarIcon />,
@@ -482,8 +486,8 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <Link className={styles.svcPrimaryBtn} href={siteRoutes.quote}>
-                Get a Quote <span aria-hidden="true">→</span>
+              <Link className={styles.svcPrimaryBtn} href={siteRoutes.book}>
+                Book a Dumpster <span aria-hidden="true">→</span>
               </Link>
             </div>
           </div>
@@ -546,8 +550,8 @@ export default function Home() {
               </p>
             </div>
             <p className={styles.whyStatsTagline}>
-              Clear pricing, dependable scheduling, and local service from quote
-              to pickup.
+              Clear pricing, dependable scheduling, and local service from
+              booking to pickup.
             </p>
             <ul className={styles.whyStatList}>
               {[
@@ -660,8 +664,8 @@ export default function Home() {
       </section>
 
       <CtaBand
-        title="Have a project in mind? Start with the right path."
-        text="Review what the upcoming quote and booking experiences will ask for, without submitting data or creating a reservation yet."
+        title="Have a project in mind? Reserve your dumpster."
+        text="Book online in a few minutes, or call and we'll set it up for you."
       />
     </>
   );

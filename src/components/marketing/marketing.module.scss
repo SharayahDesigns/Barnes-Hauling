@@ -1308,6 +1308,18 @@
   gap: var(--space-4);
 }
 
+.contactHoneypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  white-space: nowrap;
+  clip: rect(0 0 0 0);
+}
+
 .contactFormHeader {
   display: grid;
   gap: 0.25rem;
@@ -1328,6 +1340,7 @@
 
 .contactField {
   display: grid;
+  gap: 0.45rem;
 }
 
 .contactFieldLabel {
@@ -1358,6 +1371,22 @@
   outline-offset: 1px;
 }
 
+.contactFieldError,
+.contactFormError,
+.contactFormSuccess {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.contactFieldError,
+.contactFormError {
+  color: var(--color-danger);
+}
+
+.contactFormSuccess {
+  color: var(--color-success);
+}
+
 .contactSubmit {
   min-height: 3.25rem;
   margin-top: var(--space-2);
@@ -1373,6 +1402,11 @@
 
 .contactSubmit:hover {
   background: var(--color-brand-deep);
+}
+
+.contactSubmit:disabled {
+  cursor: wait;
+  opacity: 0.8;
 }
 
 /* FAQ page */

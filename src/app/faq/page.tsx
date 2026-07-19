@@ -56,17 +56,15 @@ export default function FaqPage() {
           </span>
           <div className={styles.faqCtaText}>
             <h2>Still have questions?</h2>
-            <p>
-              We&apos;re here to help. Give us a call or request a quote today.
-            </p>
+            <p>We&apos;re here to help. Book online or give us a call today.</p>
           </div>
           <div className={styles.faqCtaActions}>
-            <Link className={styles.inverseButton} href={siteRoutes.quote}>
-              Get a Quote
+            <Link className={styles.inverseButton} href={siteRoutes.book}>
+              Book a Dumpster
             </Link>
             {isConfirmedBusinessFact(phone) ? (
               <a className={styles.accentButton} href={`tel:${phone.value}`}>
-                Call Us Now
+                Call to Book
               </a>
             ) : null}
           </div>

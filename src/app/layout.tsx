@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Barlow, Barlow_Condensed, Geist_Mono } from "next/font/google";
 
+import { HideOnAdmin } from "@/components/site/hide-on-admin";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { businessConfig } from "@/config/business";
@@ -65,6 +66,17 @@ export const metadata: Metadata = {
       "Clear service paths for hauling projects and dumpster rentals, with confirmed rates and restrictions up front.",
     images: ["/images/barnes-brand-mark.png"],
   },
+  icons: {
+    icon: [
+      { url: "/images/favicon.ico", sizes: "any" },
+      { url: "/images/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+      { url: "/images/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+    ],
+    shortcut: ["/images/favicon.ico"],
+    apple: [
+      { url: "/images/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
@@ -86,9 +98,13 @@ export default function RootLayout({
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
-        <SiteHeader />
+        <HideOnAdmin>
+          <SiteHeader />
+        </HideOnAdmin>
         <main id="main-content">{children}</main>
-        <SiteFooter />
+        <HideOnAdmin>
+          <SiteFooter />
+        </HideOnAdmin>
       </body>
     </html>
   );

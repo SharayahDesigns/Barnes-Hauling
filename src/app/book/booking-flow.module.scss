@@ -1,0 +1,676 @@
+@use "../../styles/mixins" as mixins;
+
+.wrapper {
+  @include mixins.container;
+
+  padding-block: var(--space-7) var(--space-9);
+}
+
+.layout {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 60rem) {
+  .layout {
+    grid-template-columns: 16rem 1fr;
+    gap: var(--space-8);
+    align-items: start;
+  }
+}
+
+/* Progress rail */
+.progress {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.progress::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 60rem) {
+  .progress {
+    position: sticky;
+    top: var(--space-5);
+    flex-direction: column;
+    gap: var(--space-1);
+    overflow: visible;
+  }
+}
+
+.progressItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+
+.progressItemActive {
+  color: var(--color-brand-deep);
+  background: var(--color-surface-muted);
+  font-weight: 700;
+}
+
+.progressItemDone {
+  color: var(--color-brand);
+}
+
+.progressDot {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 0.125rem solid currentcolor;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.progressItemActive .progressDot,
+.progressItemDone .progressDot {
+  color: white;
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+/* Panel */
+.panel {
+  background: var(--color-surface-raised);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-raised);
+  padding: var(--space-5);
+}
+
+@media (min-width: 40rem) {
+  .panel {
+    padding: var(--space-6);
+  }
+}
+
+.stepHeader {
+  margin-bottom: var(--space-5);
+}
+
+.stepEyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--color-brand);
+  font-family: var(--font-heading), sans-serif;
+  font-size: var(--text-small);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stepTitle {
+  margin: 0 0 var(--space-2);
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  line-height: 1.1;
+  color: var(--color-ink);
+}
+
+.stepSummary {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* Fields */
+.fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.fieldRow {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 34rem) {
+  .fieldRowTwo {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fieldRowZip {
+    grid-template-columns: 8rem 1fr;
+  }
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.label {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  font-size: var(--text-small);
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  padding: 0.75rem 0.875rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.input:focus-visible,
+.textarea:focus-visible,
+.select:focus-visible {
+  border-color: var(--color-brand);
+}
+
+.inputError {
+  border-color: var(--color-danger);
+}
+
+.errorText {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--text-small);
+}
+
+.helpText {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Delivery-date calendar */
+.calendar {
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  max-width: 26rem;
+}
+
+.calHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.calTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.calNav {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.calNav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.calGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.calWeekday {
+  text-align: center;
+  padding-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.calDay {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.calDay:disabled {
+  cursor: not-allowed;
+}
+
+/* Available days — green */
+.calDayAvailable {
+  background: rgb(63 103 43 / 12%);
+  border-color: rgb(63 103 43 / 30%);
+  color: var(--color-brand-deep);
+  font-weight: 600;
+}
+
+.calDayAvailable:hover {
+  background: rgb(63 103 43 / 22%);
+  border-color: var(--color-brand);
+}
+
+/* Blackout / reserved days — red */
+.calDayUnavailable {
+  background: rgb(163 58 50 / 14%);
+  border-color: rgb(163 58 50 / 30%);
+  color: var(--color-danger);
+  text-decoration: line-through;
+}
+
+/* Past / out-of-window days — neutral */
+.calDayMuted {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.calDaySelected,
+.calDaySelected:hover {
+  background: var(--color-brand);
+  border-color: var(--color-brand-deep);
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.calLegend {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.calLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.calSwatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 0.2rem;
+  display: inline-block;
+}
+
+.calSwatchOpen {
+  background: rgb(63 103 43 / 22%);
+  border: 0.0625rem solid rgb(63 103 43 / 45%);
+}
+
+.calSwatchOff {
+  background: rgb(163 58 50 / 20%);
+  border: 0.0625rem solid rgb(163 58 50 / 45%);
+}
+
+.calNotice {
+  margin: var(--space-3) 0 0;
+  min-height: 1.25rem;
+  color: var(--color-danger);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+/* Service-area status pill */
+.statusNote {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+}
+
+.statusValidated {
+  background: rgb(63 103 43 / 12%);
+  color: var(--color-success);
+}
+
+.statusPending {
+  background: rgb(163 58 50 / 8%);
+  color: var(--color-text);
+}
+
+/* Container size cards */
+.sizeGrid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sizeCard {
+  display: grid;
+  gap: var(--space-3);
+  text-align: left;
+  padding: var(--space-4);
+  border: 0.125rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.sizeCardSelected {
+  border-color: var(--color-brand);
+  background: rgb(78 106 42 / 6%);
+}
+
+.sizeCardHead {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.sizeName {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.25rem;
+  color: var(--color-ink);
+}
+
+.sizeUse {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.sizePrice {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.5rem;
+  color: var(--color-brand-deep);
+  white-space: nowrap;
+}
+
+.sizePriceQuote {
+  font-size: var(--text-small);
+  font-family: var(--font-heading), sans-serif;
+  color: var(--color-text-muted);
+  white-space: normal;
+}
+
+.sizeRules {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* Checkboxes */
+.checkRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.checkRow input {
+  margin-top: 0.2rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.checkLabel {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.checkLabelTitle {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.checkLabelText {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Satellite placement map */
+.map {
+  width: 100%;
+  height: 20rem;
+  border-radius: var(--radius-card);
+  border: 0.0625rem solid var(--color-border);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+@media (min-width: 40rem) {
+  .map {
+    height: 24rem;
+  }
+}
+
+.mapCoords {
+  margin: var(--space-2) 0 0;
+  color: var(--color-brand-deep);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+/* Map placeholder (fallback when the key is missing) */
+.mapPlaceholder {
+  display: grid;
+  place-items: center;
+  gap: var(--space-2);
+  min-height: 12rem;
+  padding: var(--space-5);
+  text-align: center;
+  border: 0.125rem dashed var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+/* Review */
+.summaryList {
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.summaryRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 0.0625rem solid var(--color-border);
+}
+
+@media (min-width: 34rem) {
+  .summaryRow {
+    grid-template-columns: 12rem 1fr;
+    gap: var(--space-4);
+  }
+}
+
+.summaryTerm {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.summaryValue {
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.priceCard {
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  margin-bottom: var(--space-5);
+}
+
+.priceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.priceAmount {
+  font-family: var(--font-display), sans-serif;
+  font-size: 2rem;
+  color: var(--color-brand-deep);
+}
+
+.agreementCard {
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  margin-bottom: var(--space-5);
+}
+
+.agreementTitle {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-heading), sans-serif;
+  color: var(--color-ink);
+}
+
+.agreementTerms {
+  margin: 0 0 var(--space-4);
+  padding-left: 1.1rem;
+  display: grid;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-small);
+}
+
+.payStub {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  margin-bottom: var(--space-5);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.primaryButton,
+.secondaryButton {
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-control);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0.125rem solid transparent;
+}
+
+.primaryButton {
+  color: white;
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+.primaryButton:hover {
+  background: var(--color-brand-deep);
+  border-color: var(--color-brand-deep);
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  color: var(--color-brand-deep);
+  background: transparent;
+  border-color: var(--color-border);
+}
+
+.formError {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: rgb(163 58 50 / 10%);
+  color: var(--color-danger);
+  font-size: var(--text-small);
+}
+
+/* Confirmation */
+.confirmation {
+  display: grid;
+  gap: var(--space-4);
+  text-align: center;
+  padding-block: var(--space-4);
+}
+
+.confirmationBadge {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--color-brand);
+  color: white;
+  font-size: 1.75rem;
+}
+
+.confirmationNumber {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.5rem;
+  color: var(--color-brand-deep);
+}
+
+.testBanner {
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: rgb(78 106 42 / 10%);
+  color: var(--color-brand-deep);
+  font-size: var(--text-small);
+}

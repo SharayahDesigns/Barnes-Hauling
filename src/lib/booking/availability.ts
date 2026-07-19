@@ -1,0 +1,228 @@
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { denverDate, todayInDenver } from "./records";
+import { SIZE_KEYS, SIZE_KEY_TO_DUMPSTER_SIZE } from "./schema";
+import type { DeliveryAvailability, UnavailableReason } from "./types";
+
+type AdminDb = SupabaseClient;
+
+// How far ahead customers may book.
+const WINDOW_DAYS = 120;
+
+// Booking statuses that actually hold a delivery slot / dumpster. Cancelled and
+// draft bookings must NOT block dates for other customers.
+const ACTIVE_BOOKING_STATUSES = [
+  "pending_review",
+  "pending_payment",
+  "confirmed",
+  "scheduled",
+  "in_progress",
+  "completed",
+];
+const ACTIVE_BOOKING_SET = new Set(ACTIVE_BOOKING_STATUSES);
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+function weekdayOf(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/**
+ * Computes selectable delivery dates per bookable size over the booking window.
+ * A date is unavailable when:
+ *  - it falls inside an active blackout (all sizes), or
+ *  - availability rules exist and the weekday has no delivery-slot capacity or
+ *    is already full (all sizes), or
+ *  - any dumpster of that size is reserved/assigned for the date, per
+ *    dumpster_assignments (size-specific "reserved").
+ *
+ * Reads blackout_dates, availability_rules, bookings, and dumpster_assignments
+ * via the service-role client, so callers must be server-side.
+ */
+export async function getDeliveryAvailability(
+  supabase: AdminDb,
+  serviceId: string,
+): Promise<DeliveryAvailability> {
+  const minDate = todayInDenver();
+  const maxDate = addDaysIso(minDate, WINDOW_DAYS);
+  const minInstant = `${minDate}T00:00:00Z`;
+
+  const [blackoutResult, rulesResult, bookingsResult, assignmentsResult] =
+    await Promise.all([
+      supabase
+        .from("blackout_dates")
+        .select("starts_at, ends_at, service_id, public_message")
+        .eq("is_active", true),
+      supabase
+        .from("availability_rules")
+        .select("day_of_week, capacity")
+        .eq("service_id", serviceId)
+        .eq("is_active", true),
+      supabase
+        .from("bookings")
+        .select("scheduled_start_at")
+        .eq("service_id", serviceId)
+        .in("status", ACTIVE_BOOKING_STATUSES)
+        .not("scheduled_start_at", "is", null)
+        .gte("scheduled_start_at", minInstant),
+      supabase
+        .from("dumpster_assignments")
+        .select(
+          "starts_at, ends_at, status, bookings(status), dumpsters(dumpster_sizes(code))",
+        )
+        .in("status", ["reserved", "assigned"])
+        .gte("ends_at", minInstant),
+    ]);
+
+  const blackouts = (blackoutResult.data ?? []) as Array<{
+    starts_at: string;
+    ends_at: string;
+    service_id: string | null;
+    public_message: string | null;
+  }>;
+  const rules = (rulesResult.data ?? []) as Array<{
+    day_of_week: number;
+    capacity: number;
+  }>;
+  const bookings = (bookingsResult.data ?? []) as Array<{
+    scheduled_start_at: string;
+  }>;
+  const assignments = (assignmentsResult.data ?? []) as unknown as Array<{
+    starts_at: string;
+    ends_at: string;
+    bookings: { status: string } | null;
+    dumpsters: { dumpster_sizes: { code: string } | null } | null;
+  }>;
+
+  const hasRules = rules.length > 0;
+
+  const capacityByWeekday = new Map<number, number>();
+  for (const rule of rules) {
+    capacityByWeekday.set(
+      rule.day_of_week,
+      (capacityByWeekday.get(rule.day_of_week) ?? 0) + rule.capacity,
+    );
+  }
+
+  const slotReservedByDate = new Map<string, number>();
+  for (const booking of bookings) {
+    const day = denverDate(booking.scheduled_start_at);
+    slotReservedByDate.set(day, (slotReservedByDate.get(day) ?? 0) + 1);
+  }
+
+  // Per-size occupancy per date, from overlapping active assignments.
+  const occupancyBySize = new Map<string, Map<string, number>>();
+  for (const assignment of assignments) {
+    const code = assignment.dumpsters?.dumpster_sizes?.code;
+    if (!code) continue;
+    // Ignore assignments whose booking was cancelled (or is still a draft) —
+    // those must not hold dates for other customers.
+    if (!ACTIVE_BOOKING_SET.has(assignment.bookings?.status ?? "")) continue;
+    const perDate =
+      occupancyBySize.get(code) ?? new Map<string, number>();
+    occupancyBySize.set(code, perDate);
+
+    let day = denverDate(assignment.starts_at);
+    if (day < minDate) day = minDate;
+    const end = denverDate(assignment.ends_at);
+    const stop = end > maxDate ? maxDate : end;
+    for (; day <= stop; day = addDaysIso(day, 1)) {
+      perDate.set(day, (perDate.get(day) ?? 0) + 1);
+    }
+  }
+
+  const findBlackout = (date: string) =>
+    blackouts.find(
+      (entry) =>
+        (entry.service_id === null || entry.service_id === serviceId) &&
+        denverDate(entry.starts_at) <= date &&
+        date <= denverDate(entry.ends_at),
+    );
+
+  // Reasons that apply regardless of size.
+  const sharedReason = (date: string): UnavailableReason | null => {
+    const blackout = findBlackout(date);
+    if (blackout) {
+      return {
+        date,
+        kind: "blackout",
+        message: blackout.public_message?.trim() || "This date is unavailable.",
+      };
+    }
+    if (hasRules) {
+      const capacity = capacityByWeekday.get(weekdayOf(date)) ?? 0;
+      if (capacity <= 0) {
+        return { date, kind: "closed", message: "We don't deliver on this day." };
+      }
+      if ((slotReservedByDate.get(date) ?? 0) >= capacity) {
+        return { date, kind: "reserved", message: "This date is fully reserved." };
+      }
+    }
+    return null;
+  };
+
+  const bySizeKey: Record<string, UnavailableReason[]> = {};
+  for (const sizeKey of SIZE_KEYS) {
+    const code = SIZE_KEY_TO_DUMPSTER_SIZE[sizeKey];
+    const occupancy = occupancyBySize.get(code);
+    const list: UnavailableReason[] = [];
+
+    for (let date = minDate; date <= maxDate; date = addDaysIso(date, 1)) {
+      const shared = sharedReason(date);
+      if (shared) {
+        list.push(shared);
+        continue;
+      }
+      // Size-specific: any reserved/assigned dumpster of this size blocks the date.
+      if ((occupancy?.get(date) ?? 0) >= 1) {
+        list.push({
+          date,
+          kind: "reserved",
+          message: "This dumpster size is already reserved for this date.",
+        });
+      }
+    }
+
+    bySizeKey[sizeKey] = list;
+  }
+
+  return { minDate, maxDate, bySizeKey, hasRules };
+}
+
+export type DeliveryDateCheck =
+  | { available: true }
+  | { available: false; message: string };
+
+/**
+ * Server-side guard used at submit time so a posted date must satisfy the same
+ * rules the calendar enforces for the chosen size.
+ */
+export async function checkDeliveryDate(
+  supabase: AdminDb,
+  serviceId: string,
+  sizeKey: string,
+  date: string,
+): Promise<DeliveryDateCheck> {
+  const availability = await getDeliveryAvailability(supabase, serviceId);
+  if (date < availability.minDate) {
+    return { available: false, message: "This date has already passed." };
+  }
+  if (date > availability.maxDate) {
+    return { available: false, message: "Please choose a delivery date sooner." };
+  }
+  const reason = (availability.bySizeKey[sizeKey] ?? []).find(
+    (entry) => entry.date === date,
+  );
+  if (reason) {
+    return { available: false, message: reason.message };
+  }
+  return { available: true };
+}

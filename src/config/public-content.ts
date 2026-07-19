@@ -102,9 +102,9 @@ export const publicFaqs = [
     category: "General",
   },
   {
-    question: "How do I get a quote?",
+    question: "How do I book a dumpster?",
     answer:
-      "Request a quote online by entering your service address, selecting the service you need, describing the project, and uploading photos. You can also call or text us at 385-246-4219.",
+      "Book online by choosing your dumpster size, entering your service address, and selecting a delivery date. Prefer to talk it through? Call or text us at 385-246-4219 and we'll set it up for you.",
     category: "General",
   },
   {
@@ -377,7 +377,7 @@ export const publicFaqs = [
   {
     question: "Will the crew start work before I approve the price?",
     answer:
-      "No. For jobs that require onsite pricing, you approve the final quote before work begins.",
+      "No. For jobs that require onsite pricing, you approve the final price before work begins.",
     category: "Junk Removal & Hauling",
   },
   {
@@ -407,7 +407,7 @@ export const publicFaqs = [
   {
     question: "Do you remove hot tubs or sheds?",
     answer:
-      "Large structures may require an onsite estimate, demolition planning, utility confirmation, and additional labor. Upload photos and measurements when requesting a quote.",
+      "Large structures may require an onsite estimate, demolition planning, utility confirmation, and additional labor. Call us with photos and measurements so we can plan the job.",
     category: "Junk Removal & Hauling",
   },
   {
@@ -679,7 +679,7 @@ export const homepageFaqs = [
   {
     question: "Can I schedule and pay online?",
     answer:
-      "You can request a quote and plan your rental online. Online booking and payment open once service areas, availability, taxes, and required policies are finalized.",
+      "Yes — you can choose a size, pick a delivery date, and book your dumpster online, or call us to set it up. Prices and availability are shown before checkout.",
   },
 ] as const;
 
