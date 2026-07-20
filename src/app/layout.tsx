@@ -50,14 +50,21 @@ export const metadata: Metadata = {
     title: `${businessConfig.identity.name.value} | Hauling & Dumpster Rentals`,
     description:
       "Clear service paths for hauling projects and dumpster rentals, with confirmed rates and restrictions up front.",
-    // og:image is supplied by app/opengraph-image.tsx (generated hero preview).
+    images: [
+      {
+        url: "/images/OG-barnesImage.jpg",
+        width: 1731,
+        height: 909,
+        alt: `${businessConfig.identity.name.value} | Hauling & Dumpster Rentals`,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: `${businessConfig.identity.name.value} | Hauling & Dumpster Rentals`,
     description:
       "Clear service paths for hauling projects and dumpster rentals, with confirmed rates and restrictions up front.",
-    // twitter:image is supplied by app/twitter-image.tsx.
+    images: ["/images/OG-barnesImage.jpg"],
   },
   icons: {
     icon: [

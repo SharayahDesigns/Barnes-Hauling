@@ -171,6 +171,26 @@ const updateDetailsSchema = z.object({
 
 export type InventoryFormState = { error?: string; success?: string };
 
+const SERVICE_ITEM_CODE_BY_ASSET_NUMBER: Record<string, string> = {
+  "BHD1-7-14-4": "dumpster_15_residential",
+  "BHD2-7-14-4": "dumpster_15_heavy_materials",
+  "BHD1-7-14-6": "dumpster_22_residential",
+};
+
+async function syncServiceItemImagePath(
+  supabase: ReturnType<typeof createAdminClient>,
+  assetNumber: string,
+  imagePath: string | null,
+): Promise<void> {
+  const serviceItemCode = SERVICE_ITEM_CODE_BY_ASSET_NUMBER[assetNumber.trim().toUpperCase()];
+  if (!serviceItemCode) return;
+
+  await supabase
+    .from("service_items")
+    .update({ image_path: imagePath })
+    .eq("code", serviceItemCode);
+}
+
 function sanitizeAssetNumber(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
 }
@@ -254,6 +274,14 @@ export async function createDumpster(
     return { error: "Could not add the dumpster. Please retry." };
   }
 
+  if (imagePath) {
+    await syncServiceItemImagePath(
+      supabase,
+      parsed.data.assetNumber,
+      imagePath,
+    );
+  }
+
   revalidatePath("/admin/inventory");
   return { success: `Dumpster ${parsed.data.assetNumber} added.` };
 }
@@ -332,6 +360,14 @@ export async function updateDumpsterDetails(
     .eq("id", parsed.data.dumpsterSizeId);
   if (sizeUpdate.error) {
     return { error: "Dumpster details saved, but the size dimensions could not be updated." };
+  }
+
+  if (parsed.data.imageFile) {
+    await syncServiceItemImagePath(
+      supabase,
+      String(existingResult.data.asset_number),
+      imagePath,
+    );
   }
 
   if (parsed.data.imageFile && existingResult.data.image_path) {

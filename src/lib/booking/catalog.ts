@@ -30,10 +30,30 @@ type ImageRow = {
   image_path: string | null;
 };
 
+type DumpsterImageRow = {
+  dumpster_size_id: string | null;
+  image_path: string | null;
+};
+
 type DumpsterDurationRow = {
   dumpster_size_id: string | null;
   rental_duration_days: number[] | null;
 };
+
+function resolvePublicImageUrl(
+  supabase: ReturnType<typeof createAdminClient>,
+  imagePath: string,
+): string {
+  const trimmed = imagePath.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("/")) {
+    return trimmed;
+  }
+  return supabase.storage.from("dumpster-images").getPublicUrl(trimmed).data
+    .publicUrl;
+}
 
 function pricingVersionRank(status: string): number {
   if (status === "published") return 3;
@@ -99,7 +119,7 @@ function resolvePriceForRows(rows: PricingRow[]): Partial<Record<SizeKey, Bookin
 
 export async function loadBookingSizeOptions(): Promise<readonly BookingSizeOption[]> {
   const supabase = createAdminClient();
-  const [pricingResult, sizeResult, imageResult, durationResult] = await Promise.all([
+  const [pricingResult, sizeResult, imageResult, dumpsterImageResult, durationResult] = await Promise.all([
     supabase
       .from("pricing_rules")
       .select(
@@ -115,11 +135,22 @@ export async function loadBookingSizeOptions(): Promise<readonly BookingSizeOpti
       .order("sort_order"),
     supabase
       .from("dumpsters")
+      .select("dumpster_size_id, image_path")
+      .not("image_path", "is", null)
+      .neq("status", "retired"),
+    supabase
+      .from("dumpsters")
       .select("dumpster_size_id, rental_duration_days")
       .neq("status", "retired"),
   ]);
 
-  if (pricingResult.error || sizeResult.error || imageResult.error || durationResult.error) {
+  if (
+    pricingResult.error ||
+    sizeResult.error ||
+    imageResult.error ||
+    dumpsterImageResult.error ||
+    durationResult.error
+  ) {
     return STATIC_BOOKING_SIZE_OPTIONS;
   }
 
@@ -138,10 +169,17 @@ export async function loadBookingSizeOptions(): Promise<readonly BookingSizeOpti
 
   for (const row of imageRows) {
     if (!row.image_path) continue;
-    const publicUrl =
-      supabase.storage.from("dumpster-images").getPublicUrl(row.image_path).data
-        .publicUrl;
-    imageByCode.set(row.code, publicUrl);
+    imageByCode.set(row.code, resolvePublicImageUrl(supabase, row.image_path));
+  }
+
+  for (const row of ((dumpsterImageResult.data as DumpsterImageRow[] | null) ?? [])) {
+    if (!row.dumpster_size_id || !row.image_path || imageBySizeId.has(row.dumpster_size_id)) {
+      continue;
+    }
+    imageBySizeId.set(
+      row.dumpster_size_id,
+      resolvePublicImageUrl(supabase, row.image_path),
+    );
   }
 
   const durationOptionsBySizeId = new Map<string, number[]>();

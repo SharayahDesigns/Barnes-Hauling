@@ -93,6 +93,25 @@ export function FaqExplorer({ faqs }: Readonly<{ faqs: readonly Faq[] }>) {
         />
       </div>
 
+      <div className={styles.faqMobileCategoryFilter}>
+        <label className={styles.faqMobileCategoryLabel} htmlFor="faq-category-select">
+          Category
+        </label>
+        <select
+          id="faq-category-select"
+          className={styles.faqMobileCategorySelect}
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+          aria-label="Filter frequently asked questions by category"
+        >
+          {categories.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className={styles.faqBody}>
         <nav className={styles.faqSidebar} aria-label="FAQ categories">
           <ul>
