@@ -35,8 +35,9 @@ export function PageHero({
   highlights,
   slideInImage,
   showBrandLogo = false,
+  titleBars = false,
 }: Readonly<{
-  eyebrow: string;
+  eyebrow?: string;
   eyebrowIcon?: ReactNode;
   title: ReactNode;
   summary: string;
@@ -52,6 +53,7 @@ export function PageHero({
     height: number;
   }>;
   showBrandLogo?: boolean;
+  titleBars?: boolean;
 }>) {
   return (
     <section className={styles.pageHero} aria-labelledby="page-title">
@@ -72,27 +74,30 @@ export function PageHero({
             <div className={styles.heroBrand}>
               <Image
                 className={styles.heroBrandDeer}
-                src="/images/whiteDeer-Logo.webp"
-                alt=""
-                width={800}
-                height={497}
+                src="/images/greenDeer.webp"
+                alt={`${businessConfig.identity.name.value} logo`}
+                width={1227}
+                height={838}
                 priority
               />
-              <span className={styles.heroBrandText}>
-                <strong>{businessConfig.identity.shortName.value}</strong>
-                <small>Hauling &amp; Disposal</small>
-              </span>
             </div>
           ) : null}
-          <p className={styles.eyebrow}>
-            {eyebrowIcon ? (
-              <span className={styles.eyebrowIcon} aria-hidden="true">
-                {eyebrowIcon}
-              </span>
-            ) : null}
-            {eyebrow}
-          </p>
-          <h1 id="page-title">{title}</h1>
+          {eyebrow ? (
+            <p className={styles.eyebrow}>
+              {eyebrowIcon ? (
+                <span className={styles.eyebrowIcon} aria-hidden="true">
+                  {eyebrowIcon}
+                </span>
+              ) : null}
+              {eyebrow}
+            </p>
+          ) : null}
+          <h1
+            id="page-title"
+            className={titleBars ? styles.heroTitleBars : undefined}
+          >
+            {title}
+          </h1>
           <p className={styles.heroSummary}>{summary}</p>
           {primaryAction || secondaryAction ? (
             <div className={styles.actions}>

@@ -23,7 +23,6 @@ import {
   MapMarkerIcon,
   MapPinIcon,
   MountainIcon,
-  PineIcon,
   RepeatIcon,
   ShieldCheckIcon,
   StarIcon,
@@ -53,17 +52,14 @@ export default async function Home() {
     <>
       <PageHero
         showBrandLogo
-        eyebrow="Hauling & disposal, without the guesswork"
-        eyebrowIcon={<PineIcon />}
-        title={
-          <>
-            Book the right{" "}
-            <span className={styles.titleAccent}>dumpster rental</span> for your
-            project.
-          </>
-        }
+        titleBars
+        title="Dumpster Rentals"
         summary="Compare sizes, review confirmed pricing, and choose the container that fits your cleanup, remodel, or jobsite."
-        slideInImage={{ src: "/images/dump.webp", width: 1316, height: 545 }}
+        slideInImage={{
+          src: "/images/greenDeerDump.webp",
+          width: 785,
+          height: 539,
+        }}
         primaryAction={{
           label: "Compare Dumpster Sizes",
           href: "/#dumpster-info",
