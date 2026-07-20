@@ -614,6 +614,12 @@
   content: "";
 }
 
+.priceChecks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
 .priceChecks li {
   display: flex;
   align-items: flex-start;
@@ -637,12 +643,10 @@
   height: 1.1rem;
 }
 
-/* Allowed / not-allowed shown side by side */
+/* Allowed then not-allowed, stacked (each item on its own line) */
 .materialsRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-  align-items: start;
+  gap: 0.65rem;
 }
 
 /* Not-allowed materials — red */
