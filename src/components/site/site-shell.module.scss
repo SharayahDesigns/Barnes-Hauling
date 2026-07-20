@@ -339,6 +339,17 @@
   color: var(--color-accent);
 }
 
+.footerSocial {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--space-1);
+}
+
+.footerSocial svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
 .pendingContact {
   max-width: 15rem;
   margin: 0;

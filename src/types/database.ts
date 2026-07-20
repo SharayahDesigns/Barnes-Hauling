@@ -364,6 +364,8 @@ export type Database = {
       }
       bookings: {
         Row: {
+          agreement_accepted_at: string | null
+          agreement_version: string | null
           booking_number: number
           created_at: string
           customer_id: string
@@ -380,6 +382,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agreement_accepted_at?: string | null
+          agreement_version?: string | null
           booking_number?: number
           created_at?: string
           customer_id: string
@@ -396,6 +400,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agreement_accepted_at?: string | null
+          agreement_version?: string | null
           booking_number?: number
           created_at?: string
           customer_id?: string
@@ -457,6 +463,8 @@ export type Database = {
           country_code: string
           created_at: string
           customer_id: string
+          delivery_distance_miles: number | null
+          delivery_surcharge_cents: number | null
           id: string
           is_default: boolean
           label: string | null
@@ -478,6 +486,8 @@ export type Database = {
           country_code?: string
           created_at?: string
           customer_id: string
+          delivery_distance_miles?: number | null
+          delivery_surcharge_cents?: number | null
           id?: string
           is_default?: boolean
           label?: string | null
@@ -499,6 +509,8 @@ export type Database = {
           country_code?: string
           created_at?: string
           customer_id?: string
+          delivery_distance_miles?: number | null
+          delivery_surcharge_cents?: number | null
           id?: string
           is_default?: boolean
           label?: string | null
@@ -727,9 +739,15 @@ export type Database = {
           current_location: string | null
           dumpster_size_id: string
           id: string
+          image_path: string | null
           last_inspected_at: string | null
+          materials_allowed: string[]
+          materials_not_allowed: string[]
+          max_weight_tons: number | null
           maintenance_notes: string | null
           purchase_date: string | null
+          rental_duration_days: number[]
+          rental_price_cents: number | null
           status: Database["public"]["Enums"]["dumpster_status"]
           updated_at: string
         }
@@ -741,9 +759,15 @@ export type Database = {
           current_location?: string | null
           dumpster_size_id: string
           id?: string
+          image_path?: string | null
           last_inspected_at?: string | null
+          materials_allowed?: string[]
+          materials_not_allowed?: string[]
+          max_weight_tons?: number | null
           maintenance_notes?: string | null
           purchase_date?: string | null
+          rental_duration_days?: number[]
+          rental_price_cents?: number | null
           status?: Database["public"]["Enums"]["dumpster_status"]
           updated_at?: string
         }
@@ -755,9 +779,15 @@ export type Database = {
           current_location?: string | null
           dumpster_size_id?: string
           id?: string
+          image_path?: string | null
           last_inspected_at?: string | null
+          materials_allowed?: string[]
+          materials_not_allowed?: string[]
+          max_weight_tons?: number | null
           maintenance_notes?: string | null
           purchase_date?: string | null
+          rental_duration_days?: number[]
+          rental_price_cents?: number | null
           status?: Database["public"]["Enums"]["dumpster_status"]
           updated_at?: string
         }
@@ -1467,6 +1497,7 @@ export type Database = {
           default_rental_days: number | null
           description: string | null
           dumpster_size_id: string | null
+          image_path: string | null
           id: string
           item_kind: Database["public"]["Enums"]["service_item_kind"]
           name: string
@@ -1481,6 +1512,7 @@ export type Database = {
           default_rental_days?: number | null
           description?: string | null
           dumpster_size_id?: string | null
+          image_path?: string | null
           id?: string
           item_kind: Database["public"]["Enums"]["service_item_kind"]
           name: string
@@ -1495,6 +1527,7 @@ export type Database = {
           default_rental_days?: number | null
           description?: string | null
           dumpster_size_id?: string | null
+          image_path?: string | null
           id?: string
           item_kind?: Database["public"]["Enums"]["service_item_kind"]
           name?: string

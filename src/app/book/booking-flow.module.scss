@@ -369,6 +369,11 @@
   color: var(--color-text);
 }
 
+.statusInvalid {
+  background: rgb(163 58 50 / 12%);
+  color: var(--color-danger);
+}
+
 /* Container size cards */
 .sizeGrid {
   display: grid;
@@ -376,8 +381,9 @@
 }
 
 .sizeCard {
-  display: grid;
-  gap: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
   text-align: left;
   padding: var(--space-4);
   border: 0.125rem solid var(--color-border);
@@ -389,6 +395,28 @@
 .sizeCardSelected {
   border-color: var(--color-brand);
   background: rgb(78 106 42 / 6%);
+}
+
+.sizeMediaWrap {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: calc(var(--radius-card) - 0.2rem);
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.sizeMedia {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.sizeDetails {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
 }
 
 .sizeCardHead {
@@ -416,6 +444,19 @@
   font-size: 1.5rem;
   color: var(--color-brand-deep);
   white-space: nowrap;
+}
+
+.sizePriceBlock {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+}
+
+.sizePriceDetail {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  text-align: right;
+  max-width: 10rem;
 }
 
 .sizePriceQuote {
@@ -673,4 +714,66 @@
   background: rgb(78 106 42 / 10%);
   color: var(--color-brand-deep);
   font-size: var(--text-small);
+}
+
+/* Address confirmation modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(11 12 10 / 55%);
+}
+
+.modalCard {
+  display: grid;
+  gap: var(--space-4);
+  width: min(30rem, 100%);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  border-radius: var(--radius-large);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-raised);
+}
+
+.modalTitle {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.35rem;
+  color: var(--color-ink);
+}
+
+.addressOption {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+}
+
+.addressOptionLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.addressOptionValue {
+  margin: 0;
+  color: var(--color-ink);
+  line-height: 1.45;
+}
+
+.modalDismiss {
+  justify-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-brand-deep);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
 }

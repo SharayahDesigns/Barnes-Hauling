@@ -1,7 +1,7 @@
 import "server-only";
 
 import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
-import { getBookingSizeOption } from "@/lib/booking/options";
+import { getBookingSizeOption, STATIC_BOOKING_SIZE_OPTIONS } from "@/lib/booking/options";
 import type { SizeKey } from "@/lib/booking/schema";
 
 import { getResendClient } from "./client";
@@ -104,7 +104,7 @@ export async function sendBookingDraftEmails(input: {
     throw new Error("Missing booking notification recipient email");
   }
 
-  const selectedSize = getBookingSizeOption(input.sizeKey);
+  const selectedSize = getBookingSizeOption(STATIC_BOOKING_SIZE_OPTIONS, input.sizeKey);
   const sizeLabel = `${selectedSize.size} · ${selectedSize.use}`;
   const address = joinAddress([
     input.addressLine1,

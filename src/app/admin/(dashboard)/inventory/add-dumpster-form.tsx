@@ -1,33 +1,59 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 import { createDumpster, type InventoryFormState } from "@/lib/admin/inventory";
 import { DUMPSTER_STATUSES, humanizeStatus } from "@/lib/admin/dumpster-status";
 
 import styles from "../../admin.module.scss";
+import { MaterialsInput } from "./materials-input";
+import { RentalDurationsInput } from "./rental-durations-input";
 
 const INITIAL: InventoryFormState = {};
 
 export function AddDumpsterForm({
   sizes,
 }: Readonly<{ sizes: ReadonlyArray<{ id: string; name: string }> }>) {
+  const router = useRouter();
   const [state, formAction, pending] = useActionState(createDumpster, INITIAL);
 
+  useEffect(() => {
+    if (state.success) {
+      router.refresh();
+    }
+  }, [router, state.success]);
+
   return (
-    <form action={formAction} className={styles.card}>
-      <h2 className={styles.cardTitle}>Add a dumpster</h2>
-      {state.error && (
-        <p className={styles.error} role="alert">
-          {state.error}
-        </p>
-      )}
-      {state.success && (
-        <p className={styles.notice} role="status">
-          {state.success}
-        </p>
-      )}
-      <div className={styles.formGrid}>
+    <details className={styles.addDumpster}>
+      <summary className={styles.addDumpsterButton}>
+        <svg
+          className={styles.addDumpsterIcon}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+        Add a dumpster
+      </summary>
+      <form action={formAction} className={styles.addDumpsterPanel}>
+        {state.error && (
+          <p className={styles.error} role="alert">
+            {state.error}
+          </p>
+        )}
+        {state.success && (
+          <p className={styles.notice} role="status">
+            {state.success}
+          </p>
+        )}
+        <div className={styles.formGrid}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="assetNumber">
             Asset number
@@ -89,12 +115,77 @@ export function AddDumpsterForm({
             placeholder="Yard, jobsite, etc."
           />
         </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="priceDollars">
+            Price ($)
+          </label>
+          <input
+            id="priceDollars"
+            name="priceDollars"
+            type="number"
+            min="0"
+            step="0.01"
+            className={styles.input}
+            placeholder="275.00"
+          />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="maxWeightTons">
+            Max weight (tons)
+          </label>
+          <input
+            id="maxWeightTons"
+            name="maxWeightTons"
+            type="number"
+            min="0"
+            step="0.01"
+            className={styles.input}
+            placeholder="3"
+          />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="imageFile">
+            Dumpster image
+          </label>
+          <input
+            id="imageFile"
+            name="imageFile"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className={styles.input}
+          />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="conditionNotes">
+            Condition notes
+          </label>
+          <input
+            id="conditionNotes"
+            name="conditionNotes"
+            className={styles.input}
+            placeholder="Wear, dents, paint, etc."
+          />
+        </div>
+      </div>
+      <div style={{ marginTop: "var(--space-4)" }}>
+        <MaterialsInput inputId="materialsAllowed" label="Materials allowed" />
+      </div>
+      <div style={{ marginTop: "var(--space-4)" }}>
+        <MaterialsInput
+          inputId="materialsNotAllowed"
+          inputName="materialsNotAllowed"
+          label="Materials not allowed"
+        />
+      </div>
+      <div style={{ marginTop: "var(--space-4)" }}>
+        <RentalDurationsInput legend="Rental duration options" />
       </div>
       <div className={styles.actions}>
         <button type="submit" className={styles.primaryButton} disabled={pending}>
           {pending ? "Adding…" : "Add dumpster"}
         </button>
       </div>
-    </form>
+      </form>
+    </details>
   );
 }

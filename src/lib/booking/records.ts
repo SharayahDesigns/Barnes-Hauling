@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -31,6 +33,131 @@ export function denverDate(value: string | Date): string {
 
 export function todayInDenver(): string {
   return denverDate(new Date());
+}
+
+export function denverDayStart(date: string): string {
+  return `${date}T09:00:00-07:00`;
+}
+
+export function denverDayEndWithRentalDays(date: string, rentalDays: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + rentalDays);
+  return `${dt.toISOString().slice(0, 10)}T18:00:00-07:00`;
+}
+
+export function extractBookingSubmission(raw: unknown): {
+  input: Record<string, unknown>;
+  placementPhoto?: File;
+} {
+  if (!(raw instanceof FormData)) {
+    return { input: raw as Record<string, unknown> };
+  }
+
+  const placementPhoto = raw.get("placementPhoto");
+
+  return {
+    input: {
+      postalCode: String(raw.get("postalCode") ?? ""),
+      addressLine1: String(raw.get("addressLine1") ?? ""),
+      addressLine2: String(raw.get("addressLine2") ?? ""),
+      city: String(raw.get("city") ?? ""),
+      region: String(raw.get("region") ?? ""),
+      sizeKey: String(raw.get("sizeKey") ?? ""),
+      rentalDays: String(raw.get("rentalDays") ?? ""),
+      neededDate: String(raw.get("neededDate") ?? ""),
+      firstName: String(raw.get("firstName") ?? ""),
+      lastName: String(raw.get("lastName") ?? ""),
+      email: String(raw.get("email") ?? ""),
+      phone: String(raw.get("phone") ?? ""),
+      emailUpdates: String(raw.get("emailUpdates") ?? "") === "true",
+      smsUpdates: String(raw.get("smsUpdates") ?? "") === "true",
+      placementNotes: String(raw.get("placementNotes") ?? ""),
+      placementLatitude: raw.get("placementLatitude")
+        ? Number(raw.get("placementLatitude"))
+        : undefined,
+      placementLongitude: raw.get("placementLongitude")
+        ? Number(raw.get("placementLongitude"))
+        : undefined,
+      agreementAccepted: String(raw.get("agreementAccepted") ?? "") === "true",
+      turnstileToken: raw.get("turnstileToken")
+        ? String(raw.get("turnstileToken"))
+        : undefined,
+    },
+    placementPhoto:
+      placementPhoto instanceof File && placementPhoto.size > 0
+        ? placementPhoto
+        : undefined,
+  };
+}
+
+function sanitizePathPart(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+}
+
+export async function savePlacementPhoto(
+  supabase: AdminDb,
+  params: {
+    customerId: string;
+    bookingId?: string;
+    quoteId?: string;
+    file: File;
+  },
+): Promise<{ path?: string; fileId?: string; error?: string }> {
+  const allowed = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+  ]);
+  if (!allowed.has(params.file.type)) {
+    return { error: "Placement photo must be a JPG, PNG, WebP, or HEIC image." };
+  }
+  if (params.file.size > 10 * 1024 * 1024) {
+    return { error: "Placement photo must be 10 MB or smaller." };
+  }
+
+  const extension = params.file.name.split(".").pop()?.toLowerCase() || "bin";
+  const objectPath = `customers/${sanitizePathPart(params.customerId)}/placements/${randomUUID()}.${extension}`;
+  const buffer = Buffer.from(await params.file.arrayBuffer());
+
+  const upload = await supabase.storage
+    .from("customer-photos")
+    .upload(objectPath, buffer, {
+      contentType: params.file.type,
+      upsert: false,
+    });
+  if (upload.error) {
+    return { error: "Could not upload the placement photo. Please retry." };
+  }
+
+  const fileInsert = await supabase
+    .from("files")
+    .insert({
+      customer_id: params.customerId,
+      quote_id: params.quoteId ?? null,
+      booking_id: params.bookingId ?? null,
+      bucket_id: "customer-photos",
+      object_path: objectPath,
+      original_filename: params.file.name,
+      extension,
+      declared_mime_type: params.file.type || "application/octet-stream",
+      size_bytes: params.file.size,
+      category: "dumpster_placement_photo",
+      visibility: "staff_only",
+      validation_status: "pending",
+      description: "Customer-submitted dumpster placement photo.",
+    })
+    .select("id")
+    .single();
+
+  if (fileInsert.error || !fileInsert.data) {
+    await supabase.storage.from("customer-photos").remove([objectPath]);
+    return { error: "Could not save the placement photo record. Please retry." };
+  }
+
+  return { path: objectPath, fileId: fileInsert.data.id as string };
 }
 
 export async function verifyTurnstile(
@@ -92,8 +219,22 @@ export async function createCustomerAndAddress(
   supabase: AdminDb,
   input: BookingDraftInput,
 ): Promise<CustomerAndAddress> {
-  const serviceArea = await checkServiceArea(input.postalCode);
-  const confirmed = serviceArea.status === "validated";
+  const serviceArea = await checkServiceArea({
+    postalCode: input.postalCode,
+    latitude: input.placementLatitude ?? null,
+    longitude: input.placementLongitude ?? null,
+  });
+
+  if (serviceArea.status === "out_of_range") {
+    throw new Error(
+      `This address is ${serviceArea.distanceMiles.toFixed(
+        1,
+      )} miles from the dumpster yard. Online booking currently supports deliveries up to ${serviceArea.maxMiles} miles.`,
+    );
+  }
+
+  const confirmed =
+    serviceArea.status === "validated" || serviceArea.status === "extended";
 
   const customer = await supabase
     .from("customers")
@@ -125,6 +266,10 @@ export async function createCustomerAndAddress(
       validation_status: confirmed ? "validated" : "pending",
       service_area_id: confirmed ? serviceArea.serviceAreaId : null,
       service_zone_id: confirmed ? serviceArea.serviceZoneId : null,
+      delivery_distance_miles:
+        serviceArea.status === "unconfirmed" ? null : serviceArea.distanceMiles,
+      delivery_surcharge_cents:
+        serviceArea.status === "unconfirmed" ? null : serviceArea.surchargeCents,
       is_default: true,
     })
     .select("id")

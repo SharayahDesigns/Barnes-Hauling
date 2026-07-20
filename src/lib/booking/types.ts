@@ -4,7 +4,12 @@
  */
 
 export type PostalCodeCheck = {
-  status: "validated" | "unconfirmed" | "invalid";
+  status: "validated" | "extended" | "out_of_range" | "unconfirmed" | "invalid";
+  distanceMiles?: number;
+  includedMiles?: number;
+  maxMiles?: number;
+  extraMiles?: number;
+  surchargeCents?: number;
 };
 
 export type SubmitBookingResult =
@@ -42,7 +47,11 @@ export type DeliveryAvailability = {
 };
 
 export type CheckoutResult =
-  | { ok: true; url: string }
+  | {
+      ok: true;
+      bookingNumber: number;
+      serviceAreaConfirmed: boolean;
+    }
   | {
       ok: false;
       error: string;

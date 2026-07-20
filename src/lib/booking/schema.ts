@@ -54,6 +54,10 @@ export const bookingDraftSchema = z.object({
 
   // Step 2 — container
   sizeKey: z.enum(SIZE_KEYS),
+  rentalDays: z.coerce
+    .number()
+    .int("Choose a rental duration.")
+    .positive("Choose a rental duration."),
 
   // Step 3 — date needed (local calendar date, validated server-side)
   neededDate: z

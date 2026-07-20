@@ -1,13 +1,17 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import {
   CtaBand,
   DumpsterCard,
   FaqList,
+  InventoryDumpsterCard,
   PageHero,
   SectionIntro,
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
+import { ImageStrip } from "@/components/marketing/image-strip";
+import { loadHomepageDumpsters } from "@/lib/home/dumpster-inventory";
 import {
   AlertTriangleIcon,
   CalendarIcon,
@@ -39,7 +43,12 @@ export const metadata = createPageMetadata(
   siteRoutes.home,
 );
 
-export default function Home() {
+// Re-render periodically so newly added/priced dumpsters appear automatically.
+export const revalidate = 60;
+
+export default async function Home() {
+  const inventoryDumpsters = await loadHomepageDumpsters();
+
   return (
     <>
       <PageHero
@@ -81,36 +90,73 @@ export default function Home() {
         ]}
       />
 
+      <section className={styles.surfaceSection} id="dumpster-info">
+        <div className={styles.sectionInner}>
+          <div className={styles.dumpsterIntro}>
+            <SectionIntro
+              eyebrow="Dumpster rentals made simple"
+              title="Pick your size. We deliver. You fill it. We haul it away."
+              text="Flat 5-day rentals with up to 3 tons of disposal included, clear rules on what goes in, and every rate and weight limit spelled out before you book. Tell us the project and we'll get the right roll-off to your driveway or jobsite — ready for your cleanout, remodel, roofing tear-off, or landscaping haul."
+            />
+            <div className={styles.dumpsterIntroMedia}>
+              <Image
+                src="/images/truckanddump.webp"
+                alt="Barnes truck delivering a roll-off dumpster"
+                fill
+                sizes="(max-width: 60rem) 100vw, 32rem"
+                className={styles.dumpsterIntroImage}
+              />
+            </div>
+          </div>
+          <div className={styles.priceGrid}>
+            {inventoryDumpsters.length > 0
+              ? inventoryDumpsters.map((dumpster) => (
+                  <InventoryDumpsterCard key={dumpster.id} dumpster={dumpster} />
+                ))
+              : dumpsterRates.map((rate) => (
+                  <DumpsterCard key={rate.key} rate={rate} />
+                ))}
+          </div>
+        </div>
+      </section>
+
       <section className={styles.howSection}>
         <div className={styles.sectionInner}>
           <div className={styles.sectionIntro}>
+            <p className={styles.eyebrow}>Simple process</p>
             <h2>How it works</h2>
+            <p>
+              Renting a dumpster shouldn&apos;t be complicated. We make it easy
+              from start to finish.
+            </p>
           </div>
           <ol className={styles.howGrid}>
             {[
               {
                 icon: <TagIcon />,
-                title: "Pick your size",
-                text: "Compare dumpster sizes and confirmed pricing to find the right fit.",
+                title: "Choose Your Dumpster",
+                text: "Compare sizes and pricing to find the right fit for your cleanup or project.",
               },
               {
                 icon: <CalendarIcon />,
-                title: "Pick a time",
-                text: "Select a delivery or service date and location that work for you.",
+                title: "Schedule Delivery",
+                text: "Pick a convenient date and tell us where you need it placed.",
               },
               {
                 icon: <TruckIcon />,
-                title: "We show up",
-                text: "We drop off your dumpster or arrive ready to handle the hauling.",
+                title: "Fill It Up",
+                text: "Load debris at your pace while keeping your job site clean and organized.",
               },
               {
-                icon: <LeafIcon />,
-                title: "We haul it away",
-                text: "Load it up, then we pick up and dispose of everything responsibly.",
+                icon: <RepeatIcon />,
+                title: "We Haul It Away",
+                text: "When you're ready, we pick it up and dispose of everything responsibly.",
               },
             ].map((step, index) => (
               <li className={styles.howStep} key={step.title}>
-                <span className={styles.howStepNumber}>{index + 1}</span>
+                <span className={styles.howStepNumber}>
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 <span className={styles.howStepIcon} aria-hidden="true">
                   {step.icon}
                 </span>
@@ -120,8 +166,31 @@ export default function Home() {
               </li>
             ))}
           </ol>
+          <p className={styles.howTrust}>
+            <span className={styles.howTrustIcon} aria-hidden="true">
+              <ShieldCheckIcon />
+            </span>
+            <span>
+              <strong>
+                Upfront pricing. On-time service. Local team you can count on.
+              </strong>{" "}
+              That&apos;s the{" "}
+              <strong className={styles.howTrustBrand}>Barnes</strong> difference.
+            </span>
+          </p>
         </div>
       </section>
+
+      <ImageStrip
+        images={[
+          { src: "/images/truckLoad.webp", alt: "Barnes crew loading a hauling truck" },
+          { src: "/images/truckunload.webp", alt: "Barnes crew unloading a truck at the job site" },
+          { src: "/images/truckanddump.webp", alt: "Barnes truck delivering a roll-off dumpster" },
+          { src: "/images/greyDumpFullpic.webp", alt: "A Barnes roll-off dumpster on site" },
+          { src: "/images/dumptrees.webp", alt: "Roll-off dumpster on a tree-lined property" },
+          { src: "/images/dumphousemodel.webp", alt: "Roll-off dumpster placed at a home" },
+        ]}
+      />
 
       <section className={styles.section}>
         <div className={styles.sectionInner}>
@@ -250,21 +319,6 @@ export default function Home() {
             <Link className={styles.haulNoticeLink} href={siteRoutes.faq}>
               Review loading rules <span aria-hidden="true">→</span>
             </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.surfaceSection} id="dumpster-info">
-        <div className={styles.sectionInner}>
-          <SectionIntro
-            eyebrow="Confirmed dumpster information"
-            title="Start with the material. Then choose the container."
-            text="These rates and terms come from the supplied Barnes rate sheet. Service area, delivery, availability, taxes, and unlisted conditional charges still require confirmation."
-          />
-          <div className={styles.priceGrid}>
-            {dumpsterRates.map((rate) => (
-              <DumpsterCard key={rate.key} rate={rate} />
-            ))}
           </div>
         </div>
       </section>

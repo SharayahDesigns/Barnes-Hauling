@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { formatCents } from "@/config/public-content";
 import { createPageMetadata } from "@/lib/page-metadata";
 import { BOOKING_STATUSES } from "@/lib/admin/booking-status";
@@ -15,6 +17,7 @@ import styles from "../../admin.module.scss";
 import { AddBookingForm } from "./add-booking-form";
 import { BookingCalendar } from "./booking-calendar";
 import { denverDayKey, type CalendarBooking } from "./calendar-utils";
+import { PlacementSnapshotMap } from "./placement-snapshot-map";
 
 export const metadata = createPageMetadata(
   "Leads & bookings",
@@ -65,6 +68,12 @@ type BookingRow = {
     | {
         dumpster_size_id: string | null;
         dumpster_sizes: { name: string } | null;
+      }
+    | null;
+  customer_addresses:
+    | {
+        latitude: number | null;
+        longitude: number | null;
       }
     | null;
   booking_price_snapshots: PriceSnapshot[] | null;
@@ -226,14 +235,14 @@ export default async function LeadsPage({
     supabase
       .from("bookings")
       .select(
-        "id, booking_number, status, service_item_id, scheduled_start_at, scheduled_end_at, created_at, customers(first_name, last_name, email, phone), service_items(dumpster_size_id, dumpster_sizes(name)), booking_price_snapshots(total_cents, range_min_cents, range_max_cents, snapshot_type, revision_number, finalized_at), dumpster_assignments(id, status, dumpsters(id, asset_number))",
+        "id, booking_number, status, service_item_id, scheduled_start_at, scheduled_end_at, created_at, customers(first_name, last_name, email, phone), customer_addresses!bookings_service_address_id_fkey(latitude, longitude), service_items(dumpster_size_id, dumpster_sizes(name)), booking_price_snapshots(total_cents, range_min_cents, range_max_cents, snapshot_type, revision_number, finalized_at), dumpster_assignments(id, status, dumpsters(id, asset_number))",
       )
       .order("created_at", { ascending: false })
       .limit(100),
     supabase
       .from("dumpsters")
       .select("id, asset_number, status, dumpster_size_id, dumpster_sizes(name)")
-      .neq("status", "retired")
+      .in("status", ["available", "reserved"])
       .order("asset_number"),
     supabase
       .from("dumpster_assignments")
@@ -306,7 +315,14 @@ export default async function LeadsPage({
         </p>
       ) : null}
 
-      <AddBookingForm items={items} />
+      <AddBookingForm
+        items={items}
+        dumpsters={dumpsters.map((dumpster) => ({
+          id: dumpster.id,
+          asset_number: dumpster.asset_number,
+          dumpster_size_name: dumpster.dumpster_sizes?.name ?? null,
+        }))}
+      />
 
       <section className={styles.card}>
         <div className={styles.calendarHeader}>
@@ -408,6 +424,7 @@ export default async function LeadsPage({
                 <th>Ends</th>
                 <th>Status</th>
                 <th>Dumpster</th>
+                <th>Placement</th>
                 <th>Price</th>
                 <th>Delete</th>
               </tr>
@@ -421,10 +438,16 @@ export default async function LeadsPage({
                     dumpsters,
                     activeAssignments,
                   );
-
                   return (
                     <tr key={booking.id}>
-                      <td>{booking.booking_number}</td>
+                      <td>
+                        <Link
+                          href={`/admin/leads/${booking.id}`}
+                          className={styles.tableLink}
+                        >
+                          {booking.booking_number}
+                        </Link>
+                      </td>
                       <td>{dateOnly(booking.created_at)}</td>
                       <td>{customerName(booking.customers)}</td>
                       <td>
@@ -492,6 +515,24 @@ export default async function LeadsPage({
                           </form>
                         ) : currentDumpster ? (
                           currentDumpster
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>
+                        {booking.customer_addresses?.latitude != null &&
+                        booking.customer_addresses?.longitude != null ? (
+                          <Link
+                            href={`/admin/leads/${booking.id}`}
+                            className={styles.snapshotLink}
+                          >
+                            <PlacementSnapshotMap
+                              latitude={booking.customer_addresses.latitude}
+                              longitude={booking.customer_addresses.longitude}
+                              label={`Placement snapshot for booking ${booking.booking_number}`}
+                              compact
+                            />
+                          </Link>
                         ) : (
                           "—"
                         )}

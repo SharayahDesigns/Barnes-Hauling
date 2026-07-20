@@ -7,9 +7,11 @@ import { checkDeliveryDate } from "./availability";
 import { PREPAYMENT_AGREEMENT_VERSION } from "./options";
 import {
   createCustomerAndAddress,
+  extractBookingSubmission,
   recordTransactionalConsents,
   resolveDumpsterServiceId,
   resolveServiceItemId,
+  savePlacementPhoto,
   verifyTurnstile,
 } from "./records";
 import { bookingDraftSchema, SIZE_KEY_TO_ITEM_CODE } from "./schema";
@@ -17,13 +19,33 @@ import { checkServiceArea } from "./service-area";
 import type { PostalCodeCheck, SubmitBookingResult } from "./types";
 
 export async function checkPostalCodeAction(
-  postalCode: string,
+  input: {
+    postalCode: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
 ): Promise<PostalCodeCheck> {
-  if (!/^\d{5}$/.test(postalCode.trim())) {
+  if (!/^\d{5}$/.test(input.postalCode.trim())) {
     return { status: "invalid" };
   }
-  const result = await checkServiceArea(postalCode.trim());
-  return { status: result.status };
+  const result = await checkServiceArea({
+    postalCode: input.postalCode.trim(),
+    latitude: input.latitude,
+    longitude: input.longitude,
+  });
+
+  if (result.status === "unconfirmed") {
+    return { status: "unconfirmed" };
+  }
+
+  return {
+    status: result.status,
+    distanceMiles: result.distanceMiles,
+    includedMiles: result.includedMiles,
+    maxMiles: result.maxMiles,
+    extraMiles: result.extraMiles,
+    surchargeCents: result.surchargeCents,
+  };
 }
 
 /**
@@ -40,7 +62,8 @@ export async function checkPostalCodeAction(
 export async function submitBookingDraft(
   raw: unknown,
 ): Promise<SubmitBookingResult> {
-  const parsed = bookingDraftSchema.safeParse(raw);
+  const { input: candidate, placementPhoto } = extractBookingSubmission(raw);
+  const parsed = bookingDraftSchema.safeParse(candidate);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {
@@ -87,11 +110,17 @@ export async function submitBookingDraft(
   let customerId: string;
   let serviceAddressId: string;
   let serviceAreaConfirmed: boolean;
+  let serviceArea:
+    | Awaited<ReturnType<typeof createCustomerAndAddress>>["serviceArea"]
+    | null = null;
   try {
     const created = await createCustomerAndAddress(supabase, input);
     customerId = created.customerId;
     serviceAddressId = created.serviceAddressId;
-    serviceAreaConfirmed = created.serviceArea.status === "validated";
+    serviceArea = created.serviceArea;
+    serviceAreaConfirmed =
+      created.serviceArea.status === "validated" ||
+      created.serviceArea.status === "extended";
   } catch (error) {
     return {
       ok: false,
@@ -112,6 +141,7 @@ export async function submitBookingDraft(
         version: "booking_flow_v1_test_mode",
         size_key: input.sizeKey,
         service_item_code: SIZE_KEY_TO_ITEM_CODE[input.sizeKey],
+        rental_days: input.rentalDays,
         needed_date: input.neededDate,
         placement_notes: input.placementNotes ?? null,
         placement: {
@@ -119,6 +149,16 @@ export async function submitBookingDraft(
           longitude: input.placementLongitude ?? null,
         },
         service_area_check: serviceAreaConfirmed ? "validated" : "unconfirmed",
+        delivery_pricing:
+          !serviceArea || serviceArea.status === "unconfirmed"
+            ? null
+            : {
+                status: serviceArea.status,
+                distance_miles: serviceArea.distanceMiles,
+                included_miles: serviceArea.includedMiles,
+                max_miles: serviceArea.maxMiles,
+                surcharge_cents: serviceArea.surchargeCents,
+              },
         prepayment_agreement: {
           accepted: input.agreementAccepted,
           version: PREPAYMENT_AGREEMENT_VERSION,
@@ -126,10 +166,21 @@ export async function submitBookingDraft(
         notifications: { email: input.emailUpdates, sms: input.smsUpdates },
       },
     })
-    .select("quote_number")
+    .select("id, quote_number")
     .single();
   if (quoteInsert.error || !quoteInsert.data) {
     return { ok: false, error: "Could not save your request. Please retry." };
+  }
+
+  if (placementPhoto) {
+    const photo = await savePlacementPhoto(supabase, {
+      customerId,
+      quoteId: quoteInsert.data.id as string,
+      file: placementPhoto,
+    });
+    if (photo.error) {
+      return { ok: false, error: photo.error };
+    }
   }
 
   await recordTransactionalConsents(supabase, customerId, input);

@@ -1,110 +1,190 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 
 import { ImageResponse } from "next/og";
 
 // Shared social-share preview used by both app/opengraph-image and
-// app/twitter-image. Mirrors the homepage hero.
+// app/twitter-image. Mirrors the homepage hero: mountain background + gradient,
+// white-deer brand lockup (Barlow Condensed), Anton headline with the accented
+// "dumpster rental", and the dumpster image. Assets are referenced with
+// import.meta.url so Next bundles them for serverless.
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = "image/png";
 export const OG_ALT =
   "Barnes Hauling and Disposal — book the right dumpster rental for your project.";
 
+const BRAND_SOFT = "#7e9552";
+
+async function asset(path: string) {
+  return readFile(new URL(path, import.meta.url));
+}
+
 export async function renderOgPreview(): Promise<ImageResponse> {
-  const logo = await readFile(
-    join(process.cwd(), "public/images/barnes-brand-mark.png"),
-  );
-  const logoSrc = `data:image/png;base64,${logo.toString("base64")}`;
+  const [bg, deer, dump, anton, barlowCond, barlow, barlowSemi] =
+    await Promise.all([
+      asset("./assets/mountain-bg.jpg"),
+      asset("./assets/deer.png"),
+      asset("./assets/dump.png"),
+      asset("./fonts/Anton-Regular.ttf"),
+      asset("./fonts/BarlowCondensed-Bold.ttf"),
+      asset("./fonts/Barlow-Regular.ttf"),
+      asset("./fonts/Barlow-SemiBold.ttf"),
+    ]);
+
+  const bgSrc = `data:image/jpeg;base64,${bg.toString("base64")}`;
+  const deerSrc = `data:image/png;base64,${deer.toString("base64")}`;
+  const dumpSrc = `data:image/png;base64,${dump.toString("base64")}`;
 
   return new ImageResponse(
     (
       <div
         style={{
-          height: "100%",
+          position: "relative",
           width: "100%",
+          height: "100%",
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "64px 72px",
-          color: "#ffffff",
           backgroundColor: "#0b0c0a",
-          backgroundImage:
-            "linear-gradient(135deg, rgba(78,106,42,0.45) 0%, rgba(11,12,10,0) 55%), radial-gradient(1200px 600px at 85% 120%, rgba(126,149,82,0.30), rgba(11,12,10,0) 60%)",
-          fontFamily: "sans-serif",
+          fontFamily: "Barlow",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          {/* next/image is unsupported inside ImageResponse (Satori needs a raw img). */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={logoSrc} alt="" width={132} height={82} />
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: -0.5 }}>
-              Barnes Hauling &amp; Disposal
-            </span>
-            <span style={{ fontSize: 20, color: "#b7c69a" }}>Herriman, Utah</span>
-          </div>
-        </div>
+        {/* Background photo */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={bgSrc}
+          alt=""
+          width={1200}
+          height={630}
+          style={{ position: "absolute", top: 0, left: 0 }}
+        />
+        {/* Left-to-right dark gradient (matches the hero overlay) */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: 1200,
+            height: 630,
+            display: "flex",
+            backgroundImage:
+              "linear-gradient(90deg, rgba(11,12,10,0.95) 0%, rgba(11,12,10,0.80) 48%, rgba(11,12,10,0.35) 100%)",
+          }}
+        />
+        {/* Dumpster, bottom-right and slightly off-canvas like the hero */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={dumpSrc}
+          alt=""
+          width={620}
+          style={{ position: "absolute", right: -40, bottom: 46 }}
+        />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Content */}
+        <div
+          style={{
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 26,
+            padding: "0 72px",
+            width: 820,
+            height: "100%",
+          }}
+        >
+          {/* Brand lockup */}
+          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={deerSrc} alt="" height={72} />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                paddingLeft: 18,
+                borderLeft: "1px solid rgba(255,255,255,0.28)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "Barlow Condensed",
+                  fontWeight: 700,
+                  fontSize: 40,
+                  color: "#ffffff",
+                  textTransform: "uppercase",
+                  letterSpacing: -1,
+                  lineHeight: 1,
+                }}
+              >
+                Barnes
+              </span>
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: 16,
+                  color: BRAND_SOFT,
+                  textTransform: "uppercase",
+                  letterSpacing: 3,
+                  marginTop: 6,
+                }}
+              >
+                Hauling &amp; Disposal
+              </span>
+            </div>
+          </div>
+
+          {/* Eyebrow */}
           <span
             style={{
-              fontSize: 24,
-              fontWeight: 700,
+              fontWeight: 600,
+              fontSize: 22,
+              color: BRAND_SOFT,
               textTransform: "uppercase",
-              letterSpacing: 2,
-              color: "#7e9552",
+              letterSpacing: 3,
             }}
           >
             Hauling &amp; disposal, without the guesswork
           </span>
+
+          {/* Headline (Anton) */}
           <div
             style={{
               display: "flex",
-              flexWrap: "wrap",
-              fontSize: 76,
-              fontWeight: 800,
-              lineHeight: 1.04,
-              letterSpacing: -1.5,
+              flexDirection: "column",
+              fontFamily: "Anton",
+              fontSize: 84,
+              lineHeight: 0.9,
+              letterSpacing: -1,
+              textTransform: "uppercase",
+              color: "#ffffff",
             }}
           >
-            <span>Book the right&nbsp;</span>
-            <span style={{ color: "#7e9552" }}>dumpster rental&nbsp;</span>
+            <span>Book the right</span>
+            <span style={{ color: BRAND_SOFT }}>Dumpster rental</span>
             <span>for your project.</span>
           </div>
+
+          {/* Summary */}
           <span
             style={{
-              fontSize: 28,
-              color: "rgba(255,255,255,0.82)",
-              maxWidth: 900,
+              fontWeight: 400,
+              fontSize: 26,
+              lineHeight: 1.45,
+              color: "rgba(255,255,255,0.78)",
+              maxWidth: 620,
             }}
           >
             Compare sizes, review confirmed pricing, and choose the container that
             fits your cleanup, remodel, or jobsite.
           </span>
         </div>
-
-        <div style={{ display: "flex", gap: 12 }}>
-          {["Upfront pricing", "On-time service", "Local & trusted"].map(
-            (label) => (
-              <span
-                key={label}
-                style={{
-                  display: "flex",
-                  fontSize: 22,
-                  fontWeight: 700,
-                  color: "#0b0c0a",
-                  backgroundColor: "#7e9552",
-                  borderRadius: 999,
-                  padding: "10px 22px",
-                }}
-              >
-                {label}
-              </span>
-            ),
-          )}
-        </div>
       </div>
     ),
-    { ...OG_SIZE },
+    {
+      ...OG_SIZE,
+      fonts: [
+        { name: "Anton", data: anton, weight: 400, style: "normal" },
+        { name: "Barlow Condensed", data: barlowCond, weight: 700, style: "normal" },
+        { name: "Barlow", data: barlow, weight: 400, style: "normal" },
+        { name: "Barlow", data: barlowSemi, weight: 600, style: "normal" },
+      ],
+    },
   );
 }

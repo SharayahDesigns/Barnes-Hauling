@@ -121,6 +121,20 @@
   color: var(--color-brand-deep);
 }
 
+.backLink,
+.tableLink {
+  color: var(--color-brand-deep);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.backLink:hover,
+.backLink:focus-visible,
+.tableLink:hover,
+.tableLink:focus-visible {
+  text-decoration: underline;
+}
+
 .main {
   min-width: 0;
 }
@@ -191,6 +205,11 @@
   white-space: nowrap;
 }
 
+.cellWrap {
+  white-space: normal;
+  min-width: 13rem;
+}
+
 .table th {
   font-family: var(--font-heading), sans-serif;
   color: var(--color-text-muted);
@@ -199,6 +218,39 @@
 
 .table tr:last-child td {
   border-bottom: 0;
+}
+
+.snapshotLink {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.snapshotMapWrap {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.tableSnapshotMap,
+.detailSnapshotMap {
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.tableSnapshotMap {
+  width: 7rem;
+  height: 4.75rem;
+}
+
+.detailSnapshotMap {
+  width: 100%;
+  min-height: 20rem;
+}
+
+.snapshotMapFallback {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
 }
 
 .statusPill {
@@ -253,6 +305,84 @@
   margin: calc(var(--space-4) * -1) 0 var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--text-small);
+}
+
+.detailGrid {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  margin-bottom: var(--space-5);
+}
+
+.detailList {
+  margin: 0;
+}
+
+.detailRow {
+  display: grid;
+  grid-template-columns: minmax(7rem, 10rem) 1fr;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 0.0625rem solid var(--color-border);
+}
+
+.detailRow:last-child {
+  border-bottom: 0;
+}
+
+.detailRow dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  font-weight: 700;
+}
+
+.detailRow dd {
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.detailText {
+  margin: 0;
+  color: var(--color-ink);
+  white-space: pre-wrap;
+}
+
+.photoGrid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.photoCard {
+  margin: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.photoPreview,
+.photoFallback {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--color-surface-muted);
+}
+
+.photoFallback {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.photoMeta {
+  display: grid;
+  gap: 0.2rem;
+  padding: var(--space-3);
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
 }
 
 .accordionSummary {
@@ -676,6 +806,16 @@
   cursor: pointer;
 }
 
+.inventoryThumb {
+  display: block;
+  width: 4.5rem;
+  height: 3.25rem;
+  object-fit: cover;
+  border-radius: 0.6rem;
+  border: 0.0625rem solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
 .areaHead {
   display: flex;
   align-items: center;
@@ -739,4 +879,343 @@
   background: rgb(78 106 42 / 10%);
   color: var(--color-brand-deep);
   font-size: var(--text-small);
+}
+
+/* ---- Inventory cards ---- */
+.inventoryGrid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inventoryCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+}
+
+.inventoryCardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.inventoryCardThumb {
+  display: block;
+  width: 4rem;
+  height: 3rem;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 0.6rem;
+  border: 0.0625rem solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.inventoryCardThumbEmpty {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
+.inventoryCardTitle {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.inventoryCardMeta {
+  margin: 0.1rem 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.inventoryCardStatus {
+  margin-left: auto;
+}
+
+.inventoryFacts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.inventoryFacts > div {
+  min-width: 0;
+}
+
+.inventoryFactFull {
+  grid-column: 1 / -1;
+}
+
+.inventoryFacts dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inventoryFacts dd {
+  margin: 0.15rem 0 0;
+  color: var(--color-ink);
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+
+.inventoryCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+/* Inventory color coding */
+.inventoryCardAvailable {
+  border-color: var(--color-brand);
+  box-shadow: inset 0 0 0 0.0625rem var(--color-brand);
+}
+
+.inventoryCardReserved {
+  border-color: var(--color-danger);
+  box-shadow: inset 0 0 0 0.0625rem var(--color-danger);
+}
+
+.inventoryFacts .factLabelDanger {
+  color: var(--color-danger);
+}
+
+.statusPillAvailable {
+  background: rgb(78 106 42 / 14%);
+  color: var(--color-brand-deep);
+}
+
+.statusPillReserved {
+  background: rgb(163 58 50 / 14%);
+  color: var(--color-danger);
+}
+
+.inventoryPrice {
+  font-weight: 800;
+  color: var(--color-ink);
+}
+
+.availableNow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-brand-deep);
+  font-weight: 600;
+}
+
+.availableNow svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  color: var(--color-brand);
+}
+
+.inventoryFacts .materialsDanger {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+/* ---- Inventory edit-details accordion ---- */
+.editDetails {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.editSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  color: var(--color-brand-deep);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  font-size: var(--text-small);
+  cursor: pointer;
+  list-style: none;
+  transition: background 150ms ease;
+}
+
+.editSummary::-webkit-details-marker {
+  display: none;
+}
+
+.editSummary:hover {
+  background: rgb(78 106 42 / 14%);
+}
+
+.editSummaryLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editSummaryLabel svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.editChevron {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+}
+
+.editDetails[open] .editChevron {
+  transform: rotate(180deg);
+}
+
+.editBody {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
+}
+
+/* Add-a-dumpster: compact button that reveals the form */
+.addDumpster {
+  margin-bottom: var(--space-5);
+}
+
+.addDumpsterButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: fit-content;
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radius-control);
+  background: var(--color-brand);
+  color: white;
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  font-size: var(--text-small);
+  cursor: pointer;
+  list-style: none;
+  transition: background 150ms ease;
+}
+
+.addDumpsterButton::-webkit-details-marker {
+  display: none;
+}
+
+.addDumpsterButton:hover {
+  background: var(--color-brand-deep);
+}
+
+.addDumpsterIcon {
+  width: 1.1rem;
+  height: 1.1rem;
+  transition: transform 200ms ease;
+}
+
+.addDumpster[open] .addDumpsterIcon {
+  transform: rotate(45deg);
+}
+
+.addDumpsterPanel {
+  margin-top: var(--space-4);
+  padding: var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+}
+
+/* Clean file input with a styled "Choose file" button */
+.fileInput {
+  width: 100%;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.fileInput::file-selector-button {
+  margin-right: var(--space-3);
+  padding: 0.5rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  color: var(--color-brand-deep);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  font-size: var(--text-small);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.fileInput::file-selector-button:hover {
+  background: rgb(78 106 42 / 14%);
+}
+
+/* Selectable pill toggles (rental durations, etc.) */
+.choiceGroup {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.choiceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.choicePill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.5rem 0.9rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.choicePill:hover {
+  border-color: var(--color-brand);
+}
+
+.choicePill input {
+  accent-color: var(--color-brand);
+}
+
+.choicePill:has(input:checked) {
+  border-color: var(--color-brand);
+  background: rgb(78 106 42 / 12%);
+  color: var(--color-brand-deep);
 }

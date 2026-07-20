@@ -19,7 +19,11 @@ type VerifyState = { ok: boolean; text: string } | null;
 
 export function AddBookingForm({
   items,
-}: Readonly<{ items: ReadonlyArray<{ id: string; name: string }> }>) {
+  dumpsters,
+}: Readonly<{
+  items: ReadonlyArray<{ id: string; name: string }>;
+  dumpsters: ReadonlyArray<{ id: string; asset_number: string; dumpster_size_name: string | null }>;
+}>) {
   const [state, formAction, pending] = useActionState(
     createManualBooking,
     INITIAL,
@@ -257,6 +261,25 @@ export function AddBookingForm({
               {BOOKING_STATUSES.map((status) => (
                 <option key={status} value={status}>
                   {humanizeStatus(status)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="dumpsterId">
+              Assign dumpster
+            </label>
+            <select
+              id="dumpsterId"
+              name="dumpsterId"
+              className={styles.select}
+              defaultValue=""
+            >
+              <option value="">Leave unassigned</option>
+              {dumpsters.map((dumpster) => (
+                <option key={dumpster.id} value={dumpster.id}>
+                  {dumpster.asset_number}
+                  {dumpster.dumpster_size_name ? ` • ${dumpster.dumpster_size_name}` : ""}
                 </option>
               ))}
             </select>

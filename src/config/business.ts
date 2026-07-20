@@ -45,6 +45,7 @@ type BusinessConfig = Readonly<{
     phone: BusinessFact<string>;
     email: BusinessFact<string>;
     publicAddress: BusinessFact<string>;
+    facebookUrl: BusinessFact<string>;
   }>;
   operations: Readonly<{
     serviceAreas: BusinessFact<readonly string[]>;
@@ -97,6 +98,12 @@ export const businessConfig: BusinessConfig = {
       "Public business address pending business confirmation",
       ["contact page", "local business metadata"],
     ),
+    facebookUrl: {
+      status: "confirmed",
+      value:
+        "https://www.facebook.com/profile.php?id=61588190793670&sk=photos",
+      source: "business-owner",
+    },
   },
   operations: {
     serviceAreas: {

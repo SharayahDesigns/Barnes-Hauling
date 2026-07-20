@@ -18,11 +18,13 @@ export type DumpsterRate = Readonly<{
   includedTons: 3;
   materialRules: readonly string[];
   href: string;
+  image: string;
 }>;
 
 export const dumpsterRates = [
   {
     key: "15-residential",
+    image: "/images/greydump.webp",
     size: "15-yard",
     use: "Residential waste",
     dimensions: "7 ft × 14 ft × 4 ft walls",
@@ -38,6 +40,7 @@ export const dumpsterRates = [
   },
   {
     key: "15-heavy",
+    image: "/images/blackdump.webp",
     size: "15-yard",
     use: "Heavy materials",
     dimensions: "7 ft × 14 ft × 4 ft walls",
@@ -53,6 +56,7 @@ export const dumpsterRates = [
   },
   {
     key: "22-residential",
+    image: "/images/BigDumpster.webp",
     size: "22-yard",
     use: "Residential waste",
     dimensions: "7 ft × 14 ft × 6 ft walls",

@@ -3,20 +3,34 @@
 import { useEffect, useRef, useState } from "react";
 
 import { formatCents } from "@/config/public-content";
-import {
-  checkPostalCodeAction,
-  submitBookingDraft,
-} from "@/lib/booking/actions";
+import { checkPostalCodeAction, submitBookingDraft } from "@/lib/booking/actions";
 import { createBookingCheckout } from "@/lib/booking/checkout";
+import { DUMPSTER_YARD_ADDRESS } from "@/lib/booking/delivery-zone";
 import {
-  bookingSizeOptions,
   getBookingSizeOption,
   PREPAYMENT_AGREEMENT_TERMS,
   TRANSACTIONAL_CONSENT_LANGUAGE,
+  type BookingSizeOption,
 } from "@/lib/booking/options";
 import type { SizeKey } from "@/lib/booking/schema";
 import type { DeliveryAvailability, PostalCodeCheck } from "@/lib/booking/types";
 import { loadGoogleMaps } from "@/lib/maps/loader";
+
+type SuggestedAddress = {
+  formatted: string;
+  addressLine1: string;
+  city: string;
+  region: string;
+  postalCode: string;
+  lat?: number;
+  lng?: number;
+};
+
+type AddressModalState = {
+  entered: string;
+  suggestion: SuggestedAddress | null;
+  loading: boolean;
+};
 
 import styles from "./booking-flow.module.scss";
 import { DateCalendar } from "./date-calendar";
@@ -48,6 +62,7 @@ type FormState = {
   city: string;
   region: string;
   sizeKey: SizeKey | "";
+  rentalDays: number | null;
   neededDate: string;
   firstName: string;
   lastName: string;
@@ -68,6 +83,7 @@ const EMPTY_FORM: FormState = {
   city: "",
   region: "",
   sizeKey: "",
+  rentalDays: null,
   neededDate: "",
   firstName: "",
   lastName: "",
@@ -107,6 +123,9 @@ function validateStep(step: StepId, form: FormState): Errors {
   if (step === "size" && !form.sizeKey) {
     errors.sizeKey = "Choose a container.";
   }
+  if (step === "size" && (!form.rentalDays || form.rentalDays <= 0)) {
+    errors.rentalDays = "Choose a rental duration.";
+  }
 
   if (step === "schedule") {
     if (!form.neededDate) errors.neededDate = "Choose a delivery date.";
@@ -131,21 +150,75 @@ function validateStep(step: StepId, form: FormState): Errors {
   return errors;
 }
 
+function formatEnteredAddress(form: FormState): string {
+  return [
+    form.addressLine1.trim(),
+    form.addressLine2.trim(),
+    [form.city.trim(), form.region.trim()].filter(Boolean).join(", "),
+    form.postalCode.trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+async function geocodeAddress(query: string): Promise<SuggestedAddress | null> {
+  if (!MAPS_API_KEY) return null;
+  try {
+    const maps = await loadGoogleMaps(MAPS_API_KEY);
+    const geocoder = new maps.maps.Geocoder();
+    const { results } = await geocoder.geocode({
+      address: query,
+      componentRestrictions: { country: "us" },
+    });
+    const best = results?.[0];
+    if (!best) return null;
+
+    const part = (type: string, short = false) => {
+      const found = best.address_components.find((component) =>
+        component.types.includes(type),
+      );
+      return found ? (short ? found.short_name : found.long_name) : "";
+    };
+
+    const line1 = [part("street_number"), part("route")]
+      .filter(Boolean)
+      .join(" ");
+    const location = best.geometry?.location;
+
+    return {
+      formatted: best.formatted_address ?? query,
+      addressLine1: line1,
+      city: part("locality") || part("sublocality") || part("postal_town"),
+      region: part("administrative_area_level_1", true),
+      postalCode: part("postal_code"),
+      lat: location?.lat(),
+      lng: location?.lng(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function BookingFlow({
   availability,
-}: Readonly<{ availability: DeliveryAvailability }>) {
+  sizeOptions,
+}: Readonly<{
+  availability: DeliveryAvailability;
+  sizeOptions: readonly BookingSizeOption[];
+}>) {
   const [stepIndex, setStepIndex] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<Errors>({});
-  const [areaCheck, setAreaCheck] = useState<PostalCodeCheck["status"] | null>(
+  const [addressModal, setAddressModal] = useState<AddressModalState | null>(
     null,
   );
-  const [checkingArea, setCheckingArea] = useState(false);
+  const [areaCheck, setAreaCheck] = useState<PostalCodeCheck | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
-    quoteNumber: number;
+    referenceNumber: number;
     serviceAreaConfirmed: boolean;
+    kind: "booking" | "quote";
   } | null>(null);
   const restored = useRef(false);
 
@@ -177,42 +250,181 @@ export function BookingFlow({
 
   const step = STEPS[stepIndex];
 
-  const selectedOption = form.sizeKey ? getBookingSizeOption(form.sizeKey) : null;
+  const selectedOption = form.sizeKey
+    ? getBookingSizeOption(sizeOptions, form.sizeKey)
+    : null;
+  const selectedRentalDays =
+    selectedOption && form.rentalDays && form.rentalDays > 0
+      ? form.rentalDays
+      : selectedOption?.rentalDayOptions[0] ?? null;
+  const deliverySurchargeCents = areaCheck?.surchargeCents ?? 0;
+  const fixedPriceTotalCents =
+    selectedOption?.price.type === "fixed"
+      ? selectedOption.price.amountCents + deliverySurchargeCents
+      : null;
   const reviewButtonLabel =
     selectedOption?.price.type === "fixed"
-      ? `Pay ${formatCents(selectedOption.price.amountCents)} & reserve`
+      ? `Reserve ${formatCents(fixedPriceTotalCents ?? selectedOption.price.amountCents)} test booking`
       : "Submit quote request";
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
-  }
-
-  async function runAreaCheck(zipArg?: string) {
-    const zip = (zipArg ?? form.postalCode).trim();
-    if (!/^\d{5}$/.test(zip)) {
+    if (
+      key === "postalCode" ||
+      key === "addressLine1" ||
+      key === "city" ||
+      key === "region" ||
+      key === "placementLatitude" ||
+      key === "placementLongitude"
+    ) {
       setAreaCheck(null);
-      return;
-    }
-    setCheckingArea(true);
-    try {
-      const result = await checkPostalCodeAction(zip);
-      setAreaCheck(result.status);
-    } catch {
-      setAreaCheck(null);
-    } finally {
-      setCheckingArea(false);
     }
   }
 
-  function goNext() {
+  async function resolveAreaCheck(input: {
+    postalCode: string;
+    placementLatitude: number | null;
+    placementLongitude: number | null;
+  }): Promise<PostalCodeCheck | null> {
+    if (!/^\d{5}$/.test(input.postalCode.trim())) {
+      return { status: "invalid" };
+    }
+
+    return checkPostalCodeAction({
+      postalCode: input.postalCode.trim(),
+      latitude: input.placementLatitude,
+      longitude: input.placementLongitude,
+    });
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (
+        !/^\d{5}$/.test(form.postalCode.trim()) ||
+        form.placementLatitude == null ||
+        form.placementLongitude == null
+      ) {
+        return;
+      }
+
+      try {
+        const result = await resolveAreaCheck({
+      postalCode: form.postalCode,
+      placementLatitude: form.placementLatitude,
+      placementLongitude: form.placementLongitude,
+        });
+        if (!cancelled) setAreaCheck(result);
+      } catch {
+        if (!cancelled) setAreaCheck(null);
+      }
+    }
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.postalCode, form.placementLatitude, form.placementLongitude]);
+
+  function advance() {
+    setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
+  }
+
+  async function goNext() {
     const stepErrors = validateStep(step.id, form);
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
       return;
     }
     setErrors({});
-    setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
+    setFormError(null);
+
+    // On the address step, confirm the address (and offer a Google-standardized
+    // suggestion) before moving on, instead of gating on the service-area DB.
+    // If the address was already chosen from Google autocomplete (coordinates
+    // are set), it's verified — skip the confirmation popup.
+    if (step.id === "area") {
+      if (form.placementLatitude != null && form.placementLongitude != null) {
+        advance();
+        return;
+      }
+      const entered = formatEnteredAddress(form);
+      setAddressModal({ entered, suggestion: null, loading: true });
+      const suggestion = await geocodeAddress(entered);
+      setAddressModal((current) =>
+        current ? { ...current, suggestion, loading: false } : current,
+      );
+      return;
+    }
+
+    advance();
+  }
+
+  async function confirmEnteredAddress() {
+    const nextForm = { ...form };
+    if (
+      nextForm.placementLatitude == null &&
+      nextForm.placementLongitude == null &&
+      addressModal?.suggestion?.lat != null &&
+      addressModal.suggestion.lng != null
+    ) {
+      nextForm.placementLatitude = addressModal.suggestion.lat;
+      nextForm.placementLongitude = addressModal.suggestion.lng;
+      update("placementLatitude", addressModal.suggestion.lat);
+      update("placementLongitude", addressModal.suggestion.lng);
+    }
+
+    const result = await resolveAreaCheck({
+      postalCode: nextForm.postalCode,
+      placementLatitude: nextForm.placementLatitude,
+      placementLongitude: nextForm.placementLongitude,
+    });
+    setAreaCheck(result);
+    setAddressModal(null);
+    if (result?.status === "out_of_range") {
+      setFormError(
+        `This address is ${result.distanceMiles?.toFixed(1)} miles from ${DUMPSTER_YARD_ADDRESS}. Online booking currently supports deliveries up to ${result.maxMiles} miles.`,
+      );
+      return;
+    }
+    advance();
+  }
+
+  async function confirmSuggestedAddress(suggestion: SuggestedAddress) {
+    const nextForm = {
+      ...form,
+      addressLine1: suggestion.addressLine1 || form.addressLine1,
+      city: suggestion.city || form.city,
+      region: suggestion.region || form.region,
+      postalCode: suggestion.postalCode || form.postalCode,
+      placementLatitude: suggestion.lat ?? form.placementLatitude,
+      placementLongitude: suggestion.lng ?? form.placementLongitude,
+    };
+
+    if (suggestion.addressLine1) update("addressLine1", suggestion.addressLine1);
+    if (suggestion.city) update("city", suggestion.city);
+    if (suggestion.region) update("region", suggestion.region);
+    if (suggestion.postalCode) update("postalCode", suggestion.postalCode);
+    if (suggestion.lat != null) update("placementLatitude", suggestion.lat);
+    if (suggestion.lng != null) update("placementLongitude", suggestion.lng);
+
+    const result = await resolveAreaCheck({
+      postalCode: nextForm.postalCode,
+      placementLatitude: nextForm.placementLatitude,
+      placementLongitude: nextForm.placementLongitude,
+    });
+    setAreaCheck(result);
+    setAddressModal(null);
+    if (result?.status === "out_of_range") {
+      setFormError(
+        `This address is ${result.distanceMiles?.toFixed(1)} miles from ${DUMPSTER_YARD_ADDRESS}. Online booking currently supports deliveries up to ${result.maxMiles} miles.`,
+      );
+      return;
+    }
+    advance();
   }
 
   function goBack() {
@@ -226,33 +438,47 @@ export function BookingFlow({
       setErrors(stepErrors);
       return;
     }
+    if (areaCheck?.status === "out_of_range") {
+      setFormError(
+        `This address is outside the current ${areaCheck.maxMiles}-mile delivery range from ${DUMPSTER_YARD_ADDRESS}.`,
+      );
+      return;
+    }
     setSubmitting(true);
     setFormError(null);
 
-    const payload = {
-      postalCode: form.postalCode.trim(),
-      addressLine1: form.addressLine1.trim(),
-      addressLine2: form.addressLine2.trim() || undefined,
-      city: form.city.trim(),
-      region: form.region.trim(),
-      sizeKey: form.sizeKey,
-      neededDate: form.neededDate,
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      emailUpdates: form.emailUpdates,
-      smsUpdates: form.smsUpdates,
-      placementNotes: form.placementNotes.trim() || undefined,
-      placementLatitude: form.placementLatitude ?? undefined,
-      placementLongitude: form.placementLongitude ?? undefined,
-      agreementAccepted: form.agreementAccepted,
-    };
+    const payload = new FormData();
+    payload.set("postalCode", form.postalCode.trim());
+    payload.set("addressLine1", form.addressLine1.trim());
+    payload.set("addressLine2", form.addressLine2.trim());
+    payload.set("city", form.city.trim());
+    payload.set("region", form.region.trim());
+    payload.set("sizeKey", form.sizeKey);
+    if (selectedRentalDays) {
+      payload.set("rentalDays", String(selectedRentalDays));
+    }
+    payload.set("neededDate", form.neededDate);
+    payload.set("firstName", form.firstName.trim());
+    payload.set("lastName", form.lastName.trim());
+    payload.set("email", form.email.trim());
+    payload.set("phone", form.phone.trim());
+    payload.set("emailUpdates", String(form.emailUpdates));
+    payload.set("smsUpdates", String(form.smsUpdates));
+    payload.set("placementNotes", form.placementNotes.trim());
+    if (form.placementLatitude !== null) {
+      payload.set("placementLatitude", String(form.placementLatitude));
+    }
+    if (form.placementLongitude !== null) {
+      payload.set("placementLongitude", String(form.placementLongitude));
+    }
+    payload.set("agreementAccepted", String(form.agreementAccepted));
 
-    const option = form.sizeKey ? getBookingSizeOption(form.sizeKey) : null;
+    const option = form.sizeKey
+      ? getBookingSizeOption(sizeOptions, form.sizeKey)
+      : null;
 
     try {
-      // Priced sizes go to Stripe Checkout; quote-required sizes save a lead.
+      // Fixed-price sizes create a real booking immediately in test mode.
       if (option?.price.type === "fixed") {
         const result = await createBookingCheckout(payload);
         if (!result.ok) {
@@ -261,7 +487,11 @@ export function BookingFlow({
           return;
         }
         window.sessionStorage.removeItem(STORAGE_KEY);
-        window.location.href = result.url;
+        setConfirmation({
+          referenceNumber: result.bookingNumber,
+          serviceAreaConfirmed: result.serviceAreaConfirmed,
+          kind: "booking",
+        });
         return;
       }
 
@@ -273,8 +503,9 @@ export function BookingFlow({
       }
       window.sessionStorage.removeItem(STORAGE_KEY);
       setConfirmation({
-        quoteNumber: result.quoteNumber,
+        referenceNumber: result.quoteNumber,
         serviceAreaConfirmed: result.serviceAreaConfirmed,
+        kind: "quote",
       });
     } catch {
       setFormError("Something went wrong. Please retry.");
@@ -293,17 +524,31 @@ export function BookingFlow({
             </span>
             <h1 className={styles.stepTitle}>Request received</h1>
             <p className={styles.confirmationNumber}>
-              Reference #{confirmation.quoteNumber}
+              {confirmation.kind === "booking" ? "Booking" : "Reference"} #
+              {confirmation.referenceNumber}
             </p>
             <p className={styles.stepSummary}>
-              We saved your dumpster request. A Barnes team member will confirm
-              {confirmation.serviceAreaConfirmed
-                ? " your delivery date and finalize pricing."
-                : " that your address is within our service area, then confirm your date and pricing."}
+              {confirmation.kind === "booking"
+                ? `We saved your dumpster booking${
+                    confirmation.serviceAreaConfirmed
+                      ? " and routed it into the admin queue for staff review."
+                      : " and flagged the address for service-area review before staff finalize it."
+                  }`
+                : `We saved your dumpster request. A Barnes team member will confirm${
+                    confirmation.serviceAreaConfirmed
+                      ? " your delivery date and finalize pricing."
+                      : " that your address is within our service area, then confirm your date and pricing."
+                  }`}
             </p>
             <p className={styles.helpText}>
-              Online payment and the emailed rental agreement are being finalized
-              and are not active in this preview. No card was charged.
+              Please check your email for a confirmation and receipt with your
+              request details. If it&apos;s not in your inbox, check your spam
+              folder.
+            </p>
+            <p className={styles.helpText}>
+              {confirmation.kind === "booking"
+                ? "Test mode is on. No card was charged, but the booking was created so you can test scheduling, assignment, and admin workflows."
+                : "Online payment and the emailed rental agreement are being finalized and are not active in this preview. No card was charged."}
             </p>
           </div>
         </div>
@@ -338,23 +583,22 @@ export function BookingFlow({
         </ol>
 
         <div className={styles.panel}>
-          <p className={styles.testBanner}>
-            Preview mode — you can walk through the full request. Payment and the
-            emailed agreement are coming next; no card is charged.
-          </p>
-
           {step.id === "area" && (
             <StepArea
               form={form}
               errors={errors}
-              areaCheck={areaCheck}
-              checkingArea={checkingArea}
               onChange={update}
-              onZipBlur={runAreaCheck}
+              areaCheck={areaCheck}
             />
           )}
           {step.id === "size" && (
-            <StepSize form={form} errors={errors} onChange={update} />
+            <StepSize
+              form={form}
+              errors={errors}
+              onChange={update}
+              areaCheck={areaCheck}
+              sizeOptions={sizeOptions}
+            />
           )}
           {step.id === "schedule" && (
             <StepSchedule
@@ -371,7 +615,13 @@ export function BookingFlow({
             <StepPlacement form={form} onChange={update} />
           )}
           {step.id === "review" && (
-            <StepReview form={form} errors={errors} onChange={update} />
+            <StepReview
+              form={form}
+              errors={errors}
+              onChange={update}
+              areaCheck={areaCheck}
+              sizeOptions={sizeOptions}
+            />
           )}
 
           {formError && (
@@ -412,6 +662,70 @@ export function BookingFlow({
           </div>
         </div>
       </div>
+
+      {addressModal && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="address-modal-title"
+        >
+          <div className={styles.modalCard}>
+            <h2 id="address-modal-title" className={styles.modalTitle}>
+              Confirm your delivery address
+            </h2>
+
+            {addressModal.loading ? (
+              <p className={styles.helpText}>Checking your address…</p>
+            ) : (
+              <>
+                <div className={styles.addressOption}>
+                  <p className={styles.addressOptionLabel}>You entered</p>
+                  <p className={styles.addressOptionValue}>
+                    {addressModal.entered}
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={confirmEnteredAddress}
+                  >
+                    Use this address
+                  </button>
+                </div>
+
+                {addressModal.suggestion &&
+                addressModal.suggestion.formatted !== addressModal.entered ? (
+                  <div className={styles.addressOption}>
+                    <p className={styles.addressOptionLabel}>
+                      Suggested by Google
+                    </p>
+                    <p className={styles.addressOptionValue}>
+                      {addressModal.suggestion.formatted}
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={() =>
+                        confirmSuggestedAddress(addressModal.suggestion!)
+                      }
+                    >
+                      Use suggested address
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            )}
+
+            <button
+              type="button"
+              className={styles.modalDismiss}
+              onClick={() => setAddressModal(null)}
+            >
+              Edit address
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -421,6 +735,38 @@ type StepProps = {
   errors: Errors;
   onChange: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
 };
+
+function areaCheckTone(status: PostalCodeCheck["status"] | undefined): string {
+  if (status === "validated" || status === "extended") {
+    return styles.statusValidated;
+  }
+  if (status === "out_of_range" || status === "invalid") {
+    return styles.statusInvalid;
+  }
+  return styles.statusPending;
+}
+
+function areaCheckMessage(areaCheck: PostalCodeCheck | null): string | null {
+  if (!areaCheck) return null;
+
+  if (areaCheck.status === "validated") {
+    return `Within the included ${areaCheck.includedMiles}-mile delivery area from ${DUMPSTER_YARD_ADDRESS}.`;
+  }
+
+  if (areaCheck.status === "extended") {
+    return `${areaCheck.distanceMiles?.toFixed(1)} miles from the yard. Delivery surcharge: ${formatCents(areaCheck.surchargeCents ?? 0)}.`;
+  }
+
+  if (areaCheck.status === "out_of_range") {
+    return `${areaCheck.distanceMiles?.toFixed(1)} miles from the yard. Online booking currently supports deliveries up to ${areaCheck.maxMiles} miles.`;
+  }
+
+  if (areaCheck.status === "invalid") {
+    return "That ZIP code doesn't look right. Please double-check it.";
+  }
+
+  return "We couldn't verify the delivery distance automatically yet. You can continue and staff can review it if needed.";
+}
 
 function Field({
   id,
@@ -454,23 +800,17 @@ function Field({
 function StepArea({
   form,
   errors,
-  areaCheck,
-  checkingArea,
   onChange,
-  onZipBlur,
-}: StepProps & {
-  areaCheck: PostalCodeCheck["status"] | null;
-  checkingArea: boolean;
-  onZipBlur: (zip?: string) => void;
-}) {
+  areaCheck,
+}: StepProps & { areaCheck: PostalCodeCheck | null }) {
   const addressRef = useRef<HTMLInputElement>(null);
   const [verified, setVerified] = useState<string | null>(null);
 
-  // Keep the latest callbacks without re-attaching the autocomplete each render.
-  const callbacks = useRef({ onChange, onZipBlur });
+  // Keep the latest callback without re-attaching the autocomplete each render.
+  const callbacks = useRef({ onChange });
   useEffect(() => {
-    callbacks.current = { onChange, onZipBlur };
-  }, [onChange, onZipBlur]);
+    callbacks.current = { onChange };
+  }, [onChange]);
 
   useEffect(() => {
     if (!MAPS_API_KEY || !addressRef.current) return;
@@ -496,7 +836,7 @@ function StepArea({
             return found ? (short ? found.short_name : found.long_name) : "";
           };
 
-          const { onChange: change, onZipBlur: checkZip } = callbacks.current;
+          const { onChange: change } = callbacks.current;
           const line1 = [part("street_number"), part("route")]
             .filter(Boolean)
             .join(" ");
@@ -515,7 +855,6 @@ function StepArea({
           }
 
           setVerified(place.formatted_address ?? line1);
-          if (postal) checkZip(postal);
         });
       })
       .catch(() => {
@@ -536,58 +875,10 @@ function StepArea({
         <p className={styles.stepEyebrow}>Step 1 of 6</p>
         <h1 className={styles.stepTitle}>Where should we deliver?</h1>
         <p className={styles.stepSummary}>
-          Enter the delivery address so we can confirm service-area coverage.
+          Enter the delivery address so we can confirm mileage and any delivery surcharge.
         </p>
       </header>
       <fieldset className={styles.fieldset}>
-        <div className={`${styles.fieldRow} ${styles.fieldRowZip}`}>
-          <Field id="postalCode" label="ZIP code" error={errors.postalCode}>
-            <input
-              id="postalCode"
-              className={`${styles.input} ${errors.postalCode ? styles.inputError : ""}`}
-              inputMode="numeric"
-              autoComplete="postal-code"
-              maxLength={5}
-              value={form.postalCode}
-              onChange={(event) =>
-                onChange("postalCode", event.target.value.replace(/\D/g, ""))
-              }
-              onBlur={() => onZipBlur()}
-              aria-invalid={Boolean(errors.postalCode)}
-            />
-          </Field>
-          <Field id="city" label="City" error={errors.city}>
-            <input
-              id="city"
-              className={`${styles.input} ${errors.city ? styles.inputError : ""}`}
-              autoComplete="address-level2"
-              value={form.city}
-              onChange={(event) => onChange("city", event.target.value)}
-            />
-          </Field>
-        </div>
-
-        {areaCheck && (
-          <p
-            className={`${styles.statusNote} ${
-              areaCheck === "validated"
-                ? styles.statusValidated
-                : styles.statusPending
-            }`}
-            role="status"
-          >
-            <span aria-hidden="true">
-              {areaCheck === "validated" ? "✓" : "ℹ"}
-            </span>
-            {areaCheck === "validated"
-              ? "Great news — that ZIP is in our confirmed service area."
-              : areaCheck === "invalid"
-                ? "That ZIP code doesn't look right. Please double-check it."
-                : "We'll confirm your address is within our service area before scheduling."}
-          </p>
-        )}
-        {checkingArea && <p className={styles.helpText}>Checking coverage…</p>}
-
         <Field
           id="addressLine1"
           label="Street address"
@@ -640,19 +931,76 @@ function StepArea({
             />
           </Field>
         </div>
+
+        <div className={`${styles.fieldRow} ${styles.fieldRowZip}`}>
+          <Field id="postalCode" label="ZIP code" error={errors.postalCode}>
+            <input
+              id="postalCode"
+              className={`${styles.input} ${errors.postalCode ? styles.inputError : ""}`}
+              inputMode="numeric"
+              autoComplete="postal-code"
+              maxLength={5}
+              value={form.postalCode}
+              onChange={(event) =>
+                onChange("postalCode", event.target.value.replace(/\D/g, ""))
+              }
+              aria-invalid={Boolean(errors.postalCode)}
+            />
+          </Field>
+          <Field id="city" label="City" error={errors.city}>
+            <input
+              id="city"
+              className={`${styles.input} ${errors.city ? styles.inputError : ""}`}
+              autoComplete="address-level2"
+              value={form.city}
+              onChange={(event) => onChange("city", event.target.value)}
+            />
+          </Field>
+        </div>
+
+        {areaCheckMessage(areaCheck) ? (
+          <p
+            className={`${styles.statusNote} ${areaCheckTone(areaCheck?.status)}`}
+            role="status"
+          >
+            <span aria-hidden="true">
+              {areaCheck?.status === "validated" || areaCheck?.status === "extended"
+                ? "✓"
+                : areaCheck?.status === "out_of_range" || areaCheck?.status === "invalid"
+                  ? "!"
+                  : "ℹ"}
+            </span>
+            {areaCheckMessage(areaCheck)}
+          </p>
+        ) : null}
+
       </fieldset>
     </>
   );
 }
 
-function StepSize({ form, errors, onChange }: StepProps) {
+function StepSize({
+  form,
+  errors,
+  onChange,
+  areaCheck,
+  sizeOptions,
+}: StepProps & {
+  areaCheck: PostalCodeCheck | null;
+  sizeOptions: readonly BookingSizeOption[];
+}) {
+  const surchargeCents = areaCheck?.surchargeCents ?? 0;
+  const selectedOption = form.sizeKey
+    ? getBookingSizeOption(sizeOptions, form.sizeKey)
+    : null;
+
   return (
     <>
       <header className={styles.stepHeader}>
         <p className={styles.stepEyebrow}>Step 2 of 6</p>
         <h1 className={styles.stepTitle}>Choose your container</h1>
         <p className={styles.stepSummary}>
-          Each rental includes a 5-day period and up to 3 tons of disposal.
+          Choose your container and rental duration. Each rental includes up to 3 tons of disposal.
         </p>
       </header>
       {errors.sizeKey && (
@@ -661,45 +1009,99 @@ function StepSize({ form, errors, onChange }: StepProps) {
         </p>
       )}
       <div className={styles.sizeGrid}>
-        {bookingSizeOptions.map((option) => {
+        {sizeOptions.map((option) => {
           const selected = form.sizeKey === option.key;
           return (
             <button
               type="button"
               key={option.key}
               className={`${styles.sizeCard} ${selected ? styles.sizeCardSelected : ""}`}
-              onClick={() => onChange("sizeKey", option.key)}
+              onClick={() => {
+                onChange("sizeKey", option.key);
+                onChange(
+                  "rentalDays",
+                  option.rentalDayOptions.includes(form.rentalDays ?? -1)
+                    ? (form.rentalDays as number)
+                    : (option.rentalDayOptions[0] ?? option.rentalDays),
+                );
+              }}
               aria-pressed={selected}
             >
-              <div className={styles.sizeCardHead}>
-                <div>
-                  <p className={styles.sizeName}>
-                    {option.size} — {option.use}
-                  </p>
-                  <p className={styles.sizeUse}>{option.dimensions}</p>
-                </div>
-                {option.price.type === "fixed" ? (
-                  <span className={styles.sizePrice}>
-                    {formatCents(option.price.amountCents)}
-                  </span>
-                ) : (
-                  <span className={styles.sizePriceQuote}>
-                    {option.price.label}
-                  </span>
-                )}
+              <div className={styles.sizeMediaWrap}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={option.image}
+                  alt={`${option.size} dumpster`}
+                  className={styles.sizeMedia}
+                />
               </div>
-              <ul className={styles.sizeRules}>
-                {option.materialRules.map((rule) => (
-                  <li key={rule}>{rule}</li>
-                ))}
-              </ul>
+              <div className={styles.sizeDetails}>
+                <div className={styles.sizeCardHead}>
+                  <div>
+                    <p className={styles.sizeName}>
+                      {option.size} — {option.use}
+                    </p>
+                    <p className={styles.sizeUse}>{option.dimensions}</p>
+                  </div>
+                  {option.price.type === "fixed" ? (
+                    <div className={styles.sizePriceBlock}>
+                      <span className={styles.sizePrice}>
+                        {formatCents(option.price.amountCents + surchargeCents)}
+                      </span>
+                      {surchargeCents > 0 ? (
+                        <span className={styles.sizePriceDetail}>
+                          Includes {formatCents(surchargeCents)} delivery distance
+                        </span>
+                      ) : areaCheck?.status === "validated" ? (
+                        <span className={styles.sizePriceDetail}>
+                          Delivery included within 20 miles
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <span className={styles.sizePriceQuote}>
+                      {option.price.label}
+                    </span>
+                  )}
+                </div>
+                <ul className={styles.sizeRules}>
+                  {option.materialRules.map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+              </div>
             </button>
           );
         })}
       </div>
+      {selectedOption ? (
+        <fieldset className={styles.fieldset} style={{ marginTop: "var(--space-4)" }}>
+          <Field id="rentalDays" label="Rental duration" error={errors.rentalDays}>
+            <select
+              id="rentalDays"
+              className={`${styles.select} ${errors.rentalDays ? styles.inputError : ""}`}
+              value={form.rentalDays ?? ""}
+              onChange={(event) => onChange("rentalDays", Number(event.target.value))}
+              aria-invalid={Boolean(errors.rentalDays)}
+            >
+              <option value="" disabled>
+                Choose rental duration
+              </option>
+              {selectedOption.rentalDayOptions.map((days) => (
+                <option key={days} value={days}>
+                  {days} day{days === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </fieldset>
+      ) : null}
       <p className={styles.helpText}>
-        Prices shown are the base 5-day rate. Taxes and any delivery charge are
-        confirmed before payment.
+        {areaCheck?.status === "extended"
+          ? `Prices below include the extra distance charge for this address: ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, with ${formatCents(areaCheck.surchargeCents ?? 0)} added beyond the 20-mile included area.`
+          : areaCheck?.status === "validated"
+            ? "Prices below include delivery inside the standard 20-mile service area. Taxes are confirmed before payment."
+            : "Prices shown are the base rental rate for the selected duration. Taxes and any delivery charge are confirmed once your address is verified."}
       </p>
     </>
   );
@@ -881,8 +1283,26 @@ function StepPlacement({
   );
 }
 
-function StepReview({ form, errors, onChange }: StepProps) {
-  const option = form.sizeKey ? getBookingSizeOption(form.sizeKey) : null;
+function StepReview({
+  form,
+  errors,
+  onChange,
+  areaCheck,
+  sizeOptions,
+}: StepProps & {
+  areaCheck: PostalCodeCheck | null;
+  sizeOptions: readonly BookingSizeOption[];
+}) {
+  const option = form.sizeKey ? getBookingSizeOption(sizeOptions, form.sizeKey) : null;
+  const rentalDays =
+    option && form.rentalDays && form.rentalDays > 0
+      ? form.rentalDays
+      : option?.rentalDayOptions[0] ?? null;
+  const surchargeCents = areaCheck?.surchargeCents ?? 0;
+  const totalCents =
+    option?.price.type === "fixed"
+      ? option.price.amountCents + surchargeCents
+      : null;
 
   return (
     <>
@@ -910,6 +1330,12 @@ function StepReview({ form, errors, onChange }: StepProps) {
           </dd>
         </div>
         <div className={styles.summaryRow}>
+          <dt className={styles.summaryTerm}>Rental duration</dt>
+          <dd className={styles.summaryValue}>
+            {rentalDays ? `${rentalDays} day${rentalDays === 1 ? "" : "s"}` : "—"}
+          </dd>
+        </div>
+        <div className={styles.summaryRow}>
           <dt className={styles.summaryTerm}>Delivery date</dt>
           <dd className={styles.summaryValue}>{form.neededDate || "—"}</dd>
         </div>
@@ -919,8 +1345,7 @@ function StepReview({ form, errors, onChange }: StepProps) {
             {form.firstName} {form.lastName} · {form.email} · {form.phone}
           </dd>
         </div>
-        {(form.placementNotes ||
-          form.placementLatitude !== null) && (
+        {(form.placementNotes || form.placementLatitude !== null) && (
           <div className={styles.summaryRow}>
             <dt className={styles.summaryTerm}>Placement</dt>
             <dd className={styles.summaryValue}>
@@ -942,7 +1367,9 @@ function StepReview({ form, errors, onChange }: StepProps) {
 
       <div className={styles.priceCard}>
         <div className={styles.priceRow}>
-          <span className={styles.summaryTerm}>Base rental (5 days, 3 tons)</span>
+          <span className={styles.summaryTerm}>
+            Base rental ({rentalDays ?? option?.rentalDays ?? 0} day{(rentalDays ?? option?.rentalDays ?? 0) === 1 ? "" : "s"}, 3 tons)
+          </span>
           {option && option.price.type === "fixed" ? (
             <span className={styles.priceAmount}>
               {formatCents(option.price.amountCents)}
@@ -951,9 +1378,30 @@ function StepReview({ form, errors, onChange }: StepProps) {
             <span className={styles.sizePriceQuote}>Priced after review</span>
           )}
         </div>
+        {option?.price.type === "fixed" && areaCheck && areaCheck.surchargeCents ? (
+          <>
+            <div className={styles.priceRow}>
+              <span className={styles.summaryTerm}>
+                Extended delivery charge
+              </span>
+              <span className={styles.priceAmount}>
+                {formatCents(areaCheck.surchargeCents)}
+              </span>
+            </div>
+            <div className={styles.priceRow}>
+              <span className={styles.summaryTerm}>Estimated total before tax</span>
+              <span className={styles.priceAmount}>
+                {formatCents(totalCents ?? option.price.amountCents)}
+              </span>
+            </div>
+          </>
+        ) : null}
         <p className={styles.helpText} style={{ marginTop: "var(--space-2)" }}>
-          Taxes and any delivery charge are confirmed before payment. Overweight
-          loads are billed at $50 per ton after the included 3 tons.
+          {areaCheck?.status === "validated"
+            ? `Delivery is included inside the standard ${areaCheck.includedMiles}-mile area from ${DUMPSTER_YARD_ADDRESS}.`
+            : areaCheck?.status === "extended"
+              ? `This address is ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, so ${formatCents(areaCheck.surchargeCents ?? 0)} has been added for the distance beyond ${areaCheck.includedMiles} miles.`
+              : "Taxes and any delivery charge are confirmed before payment. Overweight loads are billed at $50 per ton after the included 3 tons."}
         </p>
       </div>
 
@@ -991,12 +1439,11 @@ function StepReview({ form, errors, onChange }: StepProps) {
       <div className={styles.payStub}>
         {option && option.price.type === "fixed" ? (
           <>
-            <strong>Next: secure payment with Stripe.</strong>
+            <strong>Next: create a test booking.</strong>
             <span>
-              You&apos;ll be taken to Stripe&apos;s secure checkout to pay the
-              base rental and save a card for any documented overage charges.
-              Taxes and delivery are confirmed by Barnes before your booking is
-              finalized.
+              Test mode is active. Submitting this form creates the booking
+              immediately without charging a card so you can test scheduling,
+              assignment, and admin workflows.
             </span>
           </>
         ) : (

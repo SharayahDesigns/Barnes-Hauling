@@ -37,6 +37,14 @@ const manualBookingSchema = z
     region: z.string().trim().min(2, "State is required.").max(40),
     postalCode: z.string().trim().min(5, "ZIP code is required.").max(10),
     serviceItemId: z.string().uuid("Choose a dumpster size."),
+    dumpsterId: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : undefined))
+      .refine((value) => value === undefined || z.string().uuid().safeParse(value).success, {
+        message: "Choose a valid dumpster.",
+      }),
     status: z.enum(BOOKING_STATUSES),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a start date."),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date."),
@@ -88,6 +96,108 @@ function leadsPathWithMessage(
   message: string,
 ): string {
   return `/admin/leads?${kind}=${encodeURIComponent(message)}`;
+}
+
+type AssignableBooking = {
+  id: string;
+  booking_number: number;
+  status: string;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  service_items: { dumpster_size_id: string | null } | null;
+};
+
+async function assignDumpsterToBookingInternal(params: {
+  supabase: ReturnType<typeof createAdminClient>;
+  staffUserId: string;
+  booking: AssignableBooking;
+  dumpsterId: string;
+}): Promise<{ ok: true; dumpsterAssetNumber: string } | { ok: false; error: string }> {
+  const { supabase, staffUserId, booking, dumpsterId } = params;
+
+  if (
+    booking.status === "draft" ||
+    booking.status === "cancelled" ||
+    !booking.scheduled_start_at ||
+    !booking.scheduled_end_at
+  ) {
+    return {
+      ok: false,
+      error: "Only active scheduled bookings can hold a dumpster assignment.",
+    };
+  }
+
+  const requiredSizeId = booking.service_items?.dumpster_size_id;
+  if (!requiredSizeId) {
+    return {
+      ok: false,
+      error: "This booking does not have a dumpster size attached to it.",
+    };
+  }
+
+  const dumpsterResult = await supabase
+    .from("dumpsters")
+    .select("id, asset_number, dumpster_size_id")
+    .eq("id", dumpsterId)
+    .single();
+  const dumpster = dumpsterResult.data as
+    | { id: string; asset_number: string; dumpster_size_id: string }
+    | null;
+
+  if (dumpsterResult.error || !dumpster) {
+    return { ok: false, error: "Could not find that dumpster." };
+  }
+  if (dumpster.dumpster_size_id !== requiredSizeId) {
+    return {
+      ok: false,
+      error: "That dumpster does not match the size required for this booking.",
+    };
+  }
+
+  const conflictResult = await supabase
+    .from("dumpster_assignments")
+    .select("id")
+    .eq("dumpster_id", dumpster.id)
+    .in("status", ["reserved", "assigned"])
+    .neq("booking_id", booking.id)
+    .lt("starts_at", booking.scheduled_end_at)
+    .gt("ends_at", booking.scheduled_start_at)
+    .limit(1);
+  if (conflictResult.error) {
+    return { ok: false, error: "Could not verify dumpster availability." };
+  }
+  if ((conflictResult.data ?? []).length > 0) {
+    return {
+      ok: false,
+      error: `${dumpster.asset_number} is already assigned during that booking window.`,
+    };
+  }
+
+  const insertResult = await supabase.from("dumpster_assignments").insert({
+    booking_id: booking.id,
+    dumpster_id: dumpster.id,
+    status: "assigned",
+    starts_at: booking.scheduled_start_at,
+    ends_at: booking.scheduled_end_at,
+    assigned_by: staffUserId,
+  });
+  if (insertResult.error) {
+    const message = insertResult.error.message?.toLowerCase().includes("overlap")
+      ? `${dumpster.asset_number} is already booked for those dates.`
+      : "Could not assign that dumpster.";
+    return { ok: false, error: message };
+  }
+
+  const dumpsterStatusUpdate = await supabase
+    .from("dumpsters")
+    .update({ status: "reserved" })
+    .eq("id", dumpster.id)
+    .eq("status", "available");
+  if (dumpsterStatusUpdate.error) {
+    return { ok: false, error: "Booking was created, but the dumpster status could not be updated." };
+  }
+
+  return { ok: true, dumpsterAssetNumber: dumpster.asset_number };
 }
 
 export async function updateQuoteStatus(formData: FormData): Promise<void> {
@@ -427,6 +537,7 @@ export async function createManualBooking(
     region: formData.get("region"),
     postalCode: formData.get("postalCode"),
     serviceItemId: formData.get("serviceItemId"),
+    dumpsterId: formData.get("dumpsterId") ?? undefined,
     status: formData.get("status"),
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
@@ -539,6 +650,28 @@ export async function createManualBooking(
     return { error: "Could not create the booking." };
   }
 
+  const serviceItemResult = await supabase
+    .from("service_items")
+    .select("dumpster_size_id")
+    .eq("id", input.serviceItemId)
+    .single();
+  if (serviceItemResult.error) {
+    return { error: "Booking was created, but the dumpster size could not be loaded for assignment." };
+  }
+
+  const bookingForAssignment: AssignableBooking = {
+    id: bookingInsert.data.id,
+    booking_number: bookingInsert.data.booking_number,
+    status: input.status,
+    scheduled_start_at: denverDayStart(input.startDate),
+    scheduled_end_at: denverDayEnd(input.endDate),
+    service_items: {
+      dumpster_size_id:
+        (serviceItemResult.data as { dumpster_size_id: string | null } | null)
+          ?.dumpster_size_id ?? null,
+    },
+  };
+
   if (needsPublishedPricing) {
     const snapshotInsert = await supabase.from("booking_price_snapshots").insert({
       booking_id: bookingInsert.data.id,
@@ -572,8 +705,27 @@ export async function createManualBooking(
     }
   }
 
+  if (input.dumpsterId) {
+    const assignmentResult = await assignDumpsterToBookingInternal({
+      supabase,
+      staffUserId: staff.userId,
+      booking: bookingForAssignment,
+      dumpsterId: input.dumpsterId,
+    });
+
+    if (!assignmentResult.ok) {
+      return {
+        error: `Booking #${bookingInsert.data.booking_number} was created, but the dumpster was not assigned: ${assignmentResult.error}`,
+      };
+    }
+  }
+
   revalidatePath("/admin/leads");
-  return { success: `Booking #${bookingInsert.data.booking_number} added.` };
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin");
+  return {
+    success: `Booking #${bookingInsert.data.booking_number} added${input.dumpsterId ? " and dumpster assigned." : "."}`,
+  };
 }
 
 export async function deleteBooking(formData: FormData): Promise<void> {

@@ -167,11 +167,22 @@ export function DumpsterCard({ rate }: Readonly<{ rate: DumpsterRate }>) {
         <span className={styles.priceCardSize}>{rate.size}</span>
       </div>
       <p className={styles.priceCardUse}>{rate.use}</p>
-      <h3>
-        {rate.price.type === "fixed"
-          ? formatCents(rate.price.amountCents)
-          : rate.price.label}
-      </h3>
+      <div className={styles.priceCardHead}>
+        <h3>
+          {rate.price.type === "fixed"
+            ? formatCents(rate.price.amountCents)
+            : rate.price.label}
+        </h3>
+        <div className={styles.priceCardThumb}>
+          <Image
+            src={rate.image}
+            alt=""
+            fill
+            sizes="140px"
+            className={styles.priceCardThumbImg}
+          />
+        </div>
+      </div>
       <p className={styles.dimensions}>{rate.dimensions}</p>
       <dl className={styles.rateFacts}>
         <div>
@@ -303,6 +314,137 @@ export function FaqList({
         </details>
       ))}
     </div>
+  );
+}
+
+type InventoryDumpster = {
+  id: string;
+  sizeName: string;
+  dimensions: string;
+  priceCents: number | null;
+  maxWeightTons: number | null;
+  rentalDays: readonly number[];
+  materialsAllowed: readonly string[];
+  materialsNotAllowed: readonly string[];
+  imageUrl: string | null;
+};
+
+function NoIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 8l8 8" />
+    </svg>
+  );
+}
+
+export function InventoryDumpsterCard({
+  dumpster,
+}: Readonly<{ dumpster: InventoryDumpster }>) {
+  const phone = businessConfig.contact.phone;
+
+  return (
+    <article className={styles.priceCard}>
+      <div className={styles.priceCardTop}>
+        <span className={styles.priceCardIcon} aria-hidden="true">
+          <HouseIcon />
+        </span>
+        <span className={styles.priceCardSize}>{dumpster.sizeName}</span>
+      </div>
+      <div className={styles.priceCardHead}>
+        <h3>
+          {dumpster.priceCents != null
+            ? formatCents(dumpster.priceCents)
+            : "Contact for rate"}
+        </h3>
+        {dumpster.imageUrl ? (
+          <div className={styles.priceCardThumb}>
+            {/* Supabase Storage public URL — plain img avoids remote-loader config. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={dumpster.imageUrl}
+              alt=""
+              className={styles.priceCardThumbImg}
+            />
+          </div>
+        ) : null}
+      </div>
+      {dumpster.dimensions ? (
+        <p className={styles.dimensions}>{dumpster.dimensions}</p>
+      ) : null}
+      {dumpster.rentalDays.length > 0 || dumpster.maxWeightTons != null ? (
+        <dl className={styles.rateFacts}>
+          {dumpster.rentalDays.length > 0 ? (
+            <div>
+              <span className={styles.rateFactIcon} aria-hidden="true">
+                <CalendarIcon />
+              </span>
+              <dt>Rental</dt>
+              <dd>{dumpster.rentalDays.join(" or ")} days</dd>
+            </div>
+          ) : null}
+          {dumpster.maxWeightTons != null ? (
+            <div>
+              <span className={styles.rateFactIcon} aria-hidden="true">
+                <WeightIcon />
+              </span>
+              <dt>Included</dt>
+              <dd>{dumpster.maxWeightTons} tons</dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+      {dumpster.materialsAllowed.length > 0 ||
+      dumpster.materialsNotAllowed.length > 0 ? (
+        <div className={styles.materialsRow}>
+          {dumpster.materialsAllowed.length > 0 ? (
+            <ul className={`${styles.checkList} ${styles.priceChecks}`}>
+              {dumpster.materialsAllowed.map((item) => (
+                <li key={item}>
+                  <span className={styles.checkIcon} aria-hidden="true">
+                    <CheckCircleIcon />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {dumpster.materialsNotAllowed.length > 0 ? (
+            <ul className={`${styles.checkList} ${styles.priceChecks} ${styles.priceChecksNo}`}>
+              {dumpster.materialsNotAllowed.map((item) => (
+                <li key={item}>
+                  <span className={styles.checkIconNo} aria-hidden="true">
+                    <NoIcon />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={styles.priceCardActions}>
+        <Link className={styles.priceCardButton} href={siteRoutes.book}>
+          Book Online
+        </Link>
+        {isConfirmedBusinessFact(phone) ? (
+          <a
+            className={`${styles.priceCardButton} ${styles.priceCardButtonDark}`}
+            href={`tel:${phone.value}`}
+          >
+            Call To Book
+          </a>
+        ) : null}
+      </div>
+    </article>
   );
 }
 

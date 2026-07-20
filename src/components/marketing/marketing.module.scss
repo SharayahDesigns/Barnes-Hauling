@@ -484,6 +484,56 @@
   font-variant-numeric: tabular-nums;
 }
 
+.dumpsterIntro {
+  display: grid;
+  gap: var(--space-5);
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+@media (min-width: 60rem) {
+  .dumpsterIntro {
+    grid-template-columns: 1fr 32rem;
+  }
+}
+
+.dumpsterIntroMedia {
+  position: relative;
+  width: 100%;
+  /* Match the truckanddump image ratio so the full image shows without cropping. */
+  aspect-ratio: 900 / 398;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+}
+
+.dumpsterIntroImage {
+  object-fit: cover;
+  filter: brightness(1.12) saturate(1.3);
+}
+
+.priceCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.priceCardThumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 8rem;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.priceCardThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .dimensions {
   margin: 0;
   color: var(--color-text-muted);
@@ -583,6 +633,31 @@
 }
 
 .checkIcon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* Allowed / not-allowed shown side by side */
+.materialsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* Not-allowed materials — red */
+.priceChecksNo li {
+  color: var(--color-danger);
+}
+
+.checkIconNo {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+  color: var(--color-danger);
+}
+
+.checkIconNo svg {
   width: 1.1rem;
   height: 1.1rem;
 }
@@ -1635,10 +1710,21 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: url("/images/foggyBG.webp") center top / cover no-repeat;
-  filter: blur(12px);
-  transform: scale(1.1);
-  opacity: 0.35;
+  background: url("/images/lightfogBG.webp") center top / cover no-repeat;
+  opacity: 0.9;
+}
+
+.howSection .sectionIntro .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.howSection .sectionIntro .eyebrow::after {
+  content: "";
+  width: 3rem;
+  height: 2px;
+  background: currentcolor;
 }
 
 .howSection > * {
@@ -1672,19 +1758,21 @@
 
 .howStepNumber {
   position: absolute;
-  top: 1rem;
-  left: 1rem;
+  top: 0;
+  left: 1.5rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.9rem;
-  height: 1.9rem;
-  border: 1px solid rgb(78 106 42 / 45%);
-  border-radius: 50%;
-  color: var(--color-brand-deep);
-  font-size: 0.85rem;
+  width: 2.75rem;
+  padding: 0.5rem 0 0.85rem;
+  color: #fff;
+  font-family: var(--font-heading), "Arial Narrow", sans-serif;
+  font-size: 1.05rem;
   font-weight: 800;
-  background: var(--color-surface-raised);
+  letter-spacing: 0.02em;
+  background: var(--color-brand);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+  box-shadow: 0 0.4rem 0.8rem rgb(16 24 22 / 22%);
 }
 
 .howStepIcon {
@@ -1740,6 +1828,39 @@
       8px 8px no-repeat,
     linear-gradient(var(--color-brand), var(--color-brand)) center / 100% 2px
       no-repeat;
+}
+
+.howTrust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  max-width: 46rem;
+  margin: clamp(2rem, 4vw, 3.25rem) auto 0;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.howTrust strong {
+  color: var(--color-ink);
+  font-weight: 800;
+}
+
+.howTrustBrand {
+  color: var(--color-brand-deep);
+}
+
+.howTrustIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--color-brand);
+}
+
+.howTrustIcon svg {
+  width: 2.1rem;
+  height: 2.1rem;
 }
 
 /* Home — what we haul */

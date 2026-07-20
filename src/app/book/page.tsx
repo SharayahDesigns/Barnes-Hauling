@@ -1,5 +1,6 @@
 import { siteRoutes } from "@/config/site";
 import { getDeliveryAvailability } from "@/lib/booking/availability";
+import { loadBookingSizeOptions } from "@/lib/booking/catalog";
 import { resolveDumpsterServiceId, todayInDenver } from "@/lib/booking/records";
 import type { DeliveryAvailability } from "@/lib/booking/types";
 import { createPageMetadata } from "@/lib/page-metadata";
@@ -33,5 +34,6 @@ async function loadAvailability(): Promise<DeliveryAvailability> {
 
 export default async function BookPage() {
   const availability = await loadAvailability();
-  return <BookingFlow availability={availability} />;
+  const sizeOptions = await loadBookingSizeOptions();
+  return <BookingFlow availability={availability} sizeOptions={sizeOptions} />;
 }

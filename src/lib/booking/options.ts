@@ -11,7 +11,9 @@ export type BookingSizeOption = Readonly<{
   size: string;
   use: string;
   dimensions: string;
+  image: string;
   rentalDays: number;
+  rentalDayOptions: readonly number[];
   includedTons: number;
   materialRules: readonly string[];
   price:
@@ -19,21 +21,26 @@ export type BookingSizeOption = Readonly<{
     | { type: "quote_required"; label: string };
 }>;
 
-export const bookingSizeOptions: readonly BookingSizeOption[] = dumpsterRates.map(
+export const STATIC_BOOKING_SIZE_OPTIONS: readonly BookingSizeOption[] = dumpsterRates.map(
   (rate) => ({
     key: rate.key,
     size: rate.size,
     use: rate.use,
     dimensions: rate.dimensions,
+    image: rate.image,
     rentalDays: rate.rentalDays,
+    rentalDayOptions: [rate.rentalDays],
     includedTons: rate.includedTons,
     materialRules: rate.materialRules,
     price: rate.price,
   }),
 );
 
-export function getBookingSizeOption(key: SizeKey): BookingSizeOption {
-  const option = bookingSizeOptions.find((item) => item.key === key);
+export function getBookingSizeOption(
+  options: readonly BookingSizeOption[],
+  key: SizeKey,
+): BookingSizeOption {
+  const option = options.find((item) => item.key === key);
   if (!option) {
     throw new Error(`Unknown dumpster size option: ${key}`);
   }

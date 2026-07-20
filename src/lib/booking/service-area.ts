@@ -2,29 +2,89 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import {
+  calculateDeliveryPricing,
+  DUMPSTER_YARD_POINT,
+  haversineMiles,
+  MAX_DELIVERY_RADIUS_MILES,
+} from "./delivery-zone";
+
 /**
- * Service-area validation for a US ZIP code.
+ * Service-area validation for a dumpster delivery address.
  *
- * A ZIP only counts as "validated" when it maps to a seeded postal code inside
- * an active service zone and active service area. No production service-area
- * ZIPs are confirmed yet, so this currently returns "unconfirmed" for every
- * ZIP. We never fabricate coverage: an unconfirmed address is stored as
- * `pending` and a staff member (or seeded ZIP data) confirms it later.
+ * Preferred path: use geocoded destination coordinates and compute distance
+ * from the configured dumpster-yard point, including the extended-distance
+ * surcharge beyond 20 miles.
+ *
+ * Fallback path: if coordinates are unavailable, use the legacy ZIP coverage
+ * table so staff can still mark known areas as covered manually.
  */
 export type ServiceAreaResult =
-  | { status: "validated"; serviceAreaId: string; serviceZoneId: string }
+  | {
+      status: "validated" | "extended";
+      serviceAreaId: string | null;
+      serviceZoneId: string | null;
+      distanceMiles: number;
+      includedMiles: number;
+      maxMiles: number;
+      extraMiles: number;
+      surchargeCents: number;
+    }
+  | {
+      status: "out_of_range";
+      serviceAreaId: null;
+      serviceZoneId: null;
+      distanceMiles: number;
+      includedMiles: number;
+      maxMiles: number;
+      extraMiles: number;
+      surchargeCents: number;
+    }
   | { status: "unconfirmed" };
 
 export async function checkServiceArea(
-  postalCode: string,
+  input: {
+    postalCode: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
 ): Promise<ServiceAreaResult> {
+  if (
+    input.latitude != null &&
+    Number.isFinite(input.latitude) &&
+    input.longitude != null &&
+    Number.isFinite(input.longitude)
+  ) {
+    const distanceMiles = haversineMiles(DUMPSTER_YARD_POINT, {
+      lat: input.latitude,
+      lng: input.longitude,
+    });
+    const pricing = calculateDeliveryPricing(distanceMiles);
+
+    if (pricing.distanceMiles > MAX_DELIVERY_RADIUS_MILES) {
+      return {
+        status: "out_of_range",
+        serviceAreaId: null,
+        serviceZoneId: null,
+        ...pricing,
+      };
+    }
+
+    return {
+      status: pricing.surchargeCents > 0 ? "extended" : "validated",
+      serviceAreaId: null,
+      serviceZoneId: null,
+      ...pricing,
+    };
+  }
+
   const supabase = createAdminClient();
 
   const { data: matches, error } = await supabase
     .from("service_zone_postal_codes")
     .select("service_zone_id")
     .eq("country_code", "US")
-    .eq("postal_code", postalCode)
+    .eq("postal_code", input.postalCode)
     .limit(1);
 
   if (error) {
@@ -56,5 +116,6 @@ export async function checkServiceArea(
     status: "validated",
     serviceAreaId: zone.service_area_id,
     serviceZoneId: zone.id,
+    ...calculateDeliveryPricing(0),
   };
 }
