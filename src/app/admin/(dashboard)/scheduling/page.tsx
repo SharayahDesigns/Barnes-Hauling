@@ -82,17 +82,17 @@ export default async function SchedulingPage() {
             <tbody>
               {blackouts.map((blackout) => (
                 <tr key={blackout.id}>
-                  <td>
+                  <td data-label="Dates">
                     {denverDate(blackout.starts_at)} → {denverDate(blackout.ends_at)}
                   </td>
-                  <td>{blackout.internal_reason}</td>
-                  <td>{blackout.public_message ?? "—"}</td>
-                  <td>
+                  <td data-label="Reason">{blackout.internal_reason}</td>
+                  <td data-label="Public message">{blackout.public_message ?? "—"}</td>
+                  <td data-label="Active">
                     <span className={styles.statusPill}>
                       {blackout.is_active ? "active" : "inactive"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Action">
                     <form action={deleteBlackout}>
                       <input type="hidden" name="id" value={blackout.id} />
                       <button type="submit" className={styles.smallButton}>
@@ -126,18 +126,18 @@ export default async function SchedulingPage() {
             <tbody>
               {rules.map((rule) => (
                 <tr key={rule.id}>
-                  <td>{weekdayLabel(rule.day_of_week)}</td>
-                  <td>
+                  <td data-label="Day">{weekdayLabel(rule.day_of_week)}</td>
+                  <td data-label="Window">
                     {rule.local_start_time.slice(0, 5)}–
                     {rule.local_end_time.slice(0, 5)}
                   </td>
-                  <td>{rule.capacity}</td>
-                  <td>
+                  <td data-label="Capacity">{rule.capacity}</td>
+                  <td data-label="Active">
                     <span className={styles.statusPill}>
                       {rule.is_active ? "active" : "inactive"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Actions">
                     <div className={styles.inlineForm}>
                       <form action={setAvailabilityRuleActive}>
                         <input type="hidden" name="id" value={rule.id} />

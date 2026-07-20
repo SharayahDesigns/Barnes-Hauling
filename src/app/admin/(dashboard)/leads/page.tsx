@@ -367,22 +367,22 @@ export default async function LeadsPage({
             <tbody>
               {quotes.map((quote) => (
                 <tr key={quote.id}>
-                  <td>{quote.quote_number}</td>
-                  <td>{dateOnly(quote.created_at)}</td>
-                  <td>{customerName(quote.customers)}</td>
-                  <td>
+                  <td data-label="Quote #">{quote.quote_number}</td>
+                  <td data-label="Received">{dateOnly(quote.created_at)}</td>
+                  <td data-label="Customer">{customerName(quote.customers)}</td>
+                  <td data-label="Contact" className={styles.cellWrap}>
                     {quote.customers?.email ?? "—"}
                     <br />
                     {quote.customers?.phone ?? ""}
                   </td>
-                  <td>{quote.request_details?.size_key ?? "—"}</td>
-                  <td>{quote.request_details?.needed_date ?? "—"}</td>
-                  <td>
+                  <td data-label="Size">{quote.request_details?.size_key ?? "—"}</td>
+                  <td data-label="Needed">{quote.request_details?.needed_date ?? "—"}</td>
+                  <td data-label="Area">
                     <span className={styles.statusPill}>
                       {quote.request_details?.service_area_check ?? "—"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Status">
                     <form action={updateQuoteStatus} className={styles.inlineForm}>
                       <input type="hidden" name="id" value={quote.id} />
                       <select
@@ -440,7 +440,7 @@ export default async function LeadsPage({
                   );
                   return (
                     <tr key={booking.id}>
-                      <td>
+                      <td data-label="Booking #">
                         <Link
                           href={`/admin/leads/${booking.id}`}
                           className={styles.tableLink}
@@ -448,19 +448,19 @@ export default async function LeadsPage({
                           {booking.booking_number}
                         </Link>
                       </td>
-                      <td>{dateOnly(booking.created_at)}</td>
-                      <td>{customerName(booking.customers)}</td>
-                      <td>
+                      <td data-label="Created">{dateOnly(booking.created_at)}</td>
+                      <td data-label="Customer">{customerName(booking.customers)}</td>
+                      <td data-label="Scheduled">
                         {booking.scheduled_start_at
                           ? dateOnly(booking.scheduled_start_at)
                           : "—"}
                       </td>
-                      <td>
+                      <td data-label="Ends">
                         {booking.scheduled_end_at
                           ? dateOnly(booking.scheduled_end_at)
                           : "—"}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <form
                           action={updateBookingStatus}
                           className={styles.inlineForm}
@@ -483,7 +483,7 @@ export default async function LeadsPage({
                           </button>
                         </form>
                       </td>
-                      <td>
+                      <td data-label="Dumpster">
                         {supportsDumpsterAssignment(booking) ? (
                           <form
                             action={assignBookingDumpster}
@@ -519,7 +519,7 @@ export default async function LeadsPage({
                           "—"
                         )}
                       </td>
-                      <td>
+                      <td data-label="Placement">
                         {booking.customer_addresses?.latitude != null &&
                         booking.customer_addresses?.longitude != null ? (
                           <Link
@@ -537,8 +537,8 @@ export default async function LeadsPage({
                           "—"
                         )}
                       </td>
-                      <td>{priceLabel(booking.booking_price_snapshots)}</td>
-                      <td>
+                      <td data-label="Price">{priceLabel(booking.booking_price_snapshots)}</td>
+                      <td data-label="Delete">
                         {canDeleteBooking(booking) ? (
                           <form action={deleteBooking}>
                             <input type="hidden" name="id" value={booking.id} />

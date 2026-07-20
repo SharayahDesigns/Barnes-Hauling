@@ -212,16 +212,18 @@ export default async function AdminDashboardPage() {
               <tbody>
                 {upcomingDropoffs.map((booking) => (
                   <tr key={booking.booking_number}>
-                    <td>#{booking.booking_number}</td>
-                    <td>{formatDropoffDate(booking.scheduled_start_at as string)}</td>
-                    <td>{customerName(booking.customers)}</td>
-                    <td>{assignedDumpsterLabel(booking)}</td>
-                    <td>
+                    <td data-label="Booking">#{booking.booking_number}</td>
+                    <td data-label="Dropoff">{formatDropoffDate(booking.scheduled_start_at as string)}</td>
+                    <td data-label="Customer">{customerName(booking.customers)}</td>
+                    <td data-label="Dumpster">{assignedDumpsterLabel(booking)}</td>
+                    <td data-label="Status">
                       <span className={styles.statusPill}>
                         {booking.status.replaceAll("_", " ")}
                       </span>
                     </td>
-                    <td>{formatCents(latestFinalizedTotalCents(booking.booking_price_snapshots))}</td>
+                    <td data-label="Booked total">
+                      {formatCents(latestFinalizedTotalCents(booking.booking_price_snapshots))}
+                    </td>
                   </tr>
                 ))}
               </tbody>

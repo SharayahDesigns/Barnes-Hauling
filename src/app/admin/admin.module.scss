@@ -67,6 +67,8 @@
   align-items: center;
   gap: var(--space-3);
   font-size: var(--text-small);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .roleBadge {
@@ -84,6 +86,24 @@
   padding: var(--space-5);
 }
 
+@media (max-width: 47.99rem) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--space-4);
+  }
+
+  .topbarRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .body {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+}
+
 @media (min-width: 60rem) {
   .body {
     grid-template-columns: 13rem 1fr;
@@ -96,6 +116,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+@media (max-width: 59.99rem) {
+  .nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    margin: 0 calc(var(--space-1) * -1);
+    padding-inline: var(--space-1);
+  }
 }
 
 @media (min-width: 60rem) {
@@ -114,6 +144,7 @@
   text-decoration: none;
   font-family: var(--font-heading), sans-serif;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .navLinkActive {
@@ -203,11 +234,68 @@
   text-align: left;
   border-bottom: 0.0625rem solid var(--color-border);
   white-space: nowrap;
+  vertical-align: top;
 }
 
 .cellWrap {
   white-space: normal;
   min-width: 13rem;
+}
+
+.tableCellStack {
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (max-width: 47.99rem) {
+  .tableWrap {
+    overflow: visible;
+    background: transparent;
+    border: 0;
+  }
+
+  .table {
+    display: block;
+    min-width: 0;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .table tr {
+    display: block;
+    border: 0.0625rem solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-surface-raised);
+    overflow: hidden;
+  }
+
+  .table td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 7.5rem) 1fr;
+    gap: var(--space-3);
+    white-space: normal;
+    align-items: start;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .table td:last-child {
+    border-bottom: 0;
+  }
 }
 
 .table th {
@@ -294,6 +382,12 @@
   margin-bottom: var(--space-5);
 }
 
+@media (max-width: 47.99rem) {
+  .card {
+    padding: var(--space-4);
+  }
+}
+
 .cardTitle {
   margin: 0 0 var(--space-4);
   font-family: var(--font-heading), sans-serif;
@@ -324,6 +418,13 @@
   gap: var(--space-3);
   padding: var(--space-2) 0;
   border-bottom: 0.0625rem solid var(--color-border);
+}
+
+@media (max-width: 47.99rem) {
+  .detailRow {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
 }
 
 .detailRow:last-child {
@@ -392,6 +493,16 @@
   gap: var(--space-3);
   cursor: pointer;
   list-style: none;
+}
+
+@media (max-width: 47.99rem) {
+  .accordionSummary,
+  .calendarHeader,
+  .calendarToolbar,
+  .areaHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .accordionSummary::-webkit-details-marker {
@@ -538,6 +649,12 @@
   background: var(--color-border);
 }
 
+@media (max-width: 47.99rem) {
+  .calendarGrid {
+    grid-template-columns: repeat(7, minmax(5.75rem, 1fr));
+  }
+}
+
 .calendarWeekday {
   min-width: 0;
   padding: var(--space-2) var(--space-3);
@@ -562,6 +679,13 @@
   display: grid;
   grid-template-columns: repeat(7, minmax(8rem, 1fr));
   gap: 0.0625rem;
+}
+
+@media (max-width: 47.99rem) {
+  .calendarWeekDays,
+  .calendarWeekBars {
+    grid-template-columns: repeat(7, minmax(5.75rem, 1fr));
+  }
 }
 
 .calendarWeekBars {
@@ -595,6 +719,14 @@
   background: var(--color-surface-raised);
 }
 
+@media (max-width: 47.99rem) {
+  .calendarDay {
+    min-width: 5.75rem;
+    min-height: 8.5rem;
+    padding: var(--space-2);
+  }
+}
+
 .calendarDayMuted {
   background: color-mix(in srgb, var(--color-surface-raised) 60%, white 40%);
 }
@@ -613,6 +745,12 @@
   margin-top: 4.6rem;
 }
 
+@media (max-width: 47.99rem) {
+  .calendarDayBookings {
+    margin-top: 4rem;
+  }
+}
+
 .calendarBookingBar,
 .calendarCancelledChip {
   position: relative;
@@ -625,6 +763,19 @@
   min-height: 2.1rem;
   display: flex;
   align-items: center;
+}
+
+@media (max-width: 47.99rem) {
+  .calendarBookingBar,
+  .calendarCancelledChip {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.7rem;
+  }
+
+  .calendarWeekday,
+  .calendarEmpty {
+    font-size: 0.68rem;
+  }
 }
 
 .calendarBookingSingle {
@@ -725,6 +876,7 @@
   gap: var(--space-3);
   align-items: center;
   margin-top: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .primaryButton {
@@ -736,6 +888,39 @@
   font-family: var(--font-heading), sans-serif;
   font-weight: 700;
   cursor: pointer;
+}
+
+@media (max-width: 47.99rem) {
+  .actions > * {
+    width: 100%;
+  }
+
+  .primaryButton,
+  .ghostButton,
+  .smallButton,
+  .dangerButton {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .inlineForm {
+    align-items: stretch;
+  }
+
+  .inlineForm > * {
+    width: 100%;
+  }
+
+  .inlineSelect {
+    min-height: 2.5rem;
+  }
+
+  .iconDangerButton,
+  .lockedIcon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 }
 
 .primaryButton:hover {
@@ -762,6 +947,7 @@
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .inlineSelect {
@@ -891,6 +1077,12 @@
   list-style: none;
 }
 
+@media (max-width: 47.99rem) {
+  .inventoryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .inventoryCard {
   display: flex;
   flex-direction: column;
@@ -905,6 +1097,13 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+@media (max-width: 47.99rem) {
+  .inventoryCardHead {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
 }
 
 .inventoryCardThumb {
@@ -941,11 +1140,23 @@
   margin-left: auto;
 }
 
+@media (max-width: 47.99rem) {
+  .inventoryCardStatus {
+    margin-left: 0;
+  }
+}
+
 .inventoryFacts {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-3);
   margin: 0;
+}
+
+@media (max-width: 47.99rem) {
+  .inventoryFacts {
+    grid-template-columns: 1fr;
+  }
 }
 
 .inventoryFacts > div {
@@ -981,6 +1192,12 @@
   margin-top: auto;
   padding-top: var(--space-3);
   border-top: 0.0625rem solid var(--color-border);
+}
+
+@media (max-width: 47.99rem) {
+  .inventoryCardActions {
+    align-items: stretch;
+  }
 }
 
 /* Inventory color coding */
@@ -1119,6 +1336,18 @@
   cursor: pointer;
   list-style: none;
   transition: background 150ms ease;
+}
+
+@media (max-width: 47.99rem) {
+  .addDumpsterButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .addDumpsterPanel,
+  .editBody {
+    padding: var(--space-4);
+  }
 }
 
 .addDumpsterButton::-webkit-details-marker {
