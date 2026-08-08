@@ -12,10 +12,12 @@ export type DumpsterRate = Readonly<{
   dimensions: string;
   price: Readonly<
     | { type: "fixed"; amountCents: number }
-    | { type: "quote_required"; label: "Contact for current rate" }
+    | { type: "quote_required"; label: string }
   >;
-  rentalDays: 5;
-  includedTons: 3;
+  rentalDays: number;
+  rentalDayOptions: readonly number[];
+  includedTons: number | null;
+  includedWeightLabel: string;
   materialRules: readonly string[];
   href: string;
   image: string;
@@ -29,8 +31,10 @@ export const dumpsterRates = [
     use: "Residential waste",
     dimensions: "7 ft × 14 ft × 4 ft walls",
     price: { type: "fixed", amountCents: 27500 },
+    rentalDayOptions: [2, 5],
     rentalDays: 5,
-    includedTons: 3,
+    includedTons: 2,
+    includedWeightLabel: "2 tons included",
     materialRules: [
       "Residential waste only",
       "No dirt, soil, gravel, or concrete",
@@ -44,13 +48,15 @@ export const dumpsterRates = [
     size: "15-yard",
     use: "Heavy materials",
     dimensions: "7 ft × 14 ft × 4 ft walls",
-    price: { type: "fixed", amountCents: 35000 },
+    price: { type: "quote_required", label: "Starting at $395" },
+    rentalDayOptions: [5],
     rentalDays: 5,
-    includedTons: 3,
+    includedTons: null,
+    includedWeightLabel: "Weight set by approved material",
     materialRules: [
-      "Dirt, sod, concrete, and gravel only",
-      "No residential household trash",
-      "Swap-out service is priced as another rental",
+      "Staff approval required before booking",
+      "One clean material type only",
+      "Included weight and overage rate depend on the approved material",
     ],
     href: siteRoutes.dumpster15,
   },
@@ -60,9 +66,11 @@ export const dumpsterRates = [
     size: "22-yard",
     use: "Residential waste",
     dimensions: "7 ft × 14 ft × 6 ft walls",
-    price: { type: "quote_required", label: "Contact for current rate" },
+    price: { type: "fixed", amountCents: 32500 },
+    rentalDayOptions: [5],
     rentalDays: 5,
     includedTons: 3,
+    includedWeightLabel: "3 tons included",
     materialRules: [
       "Residential waste only",
       "No dirt, sod, concrete, or gravel",
@@ -74,14 +82,26 @@ export const dumpsterRates = [
 
 export const dumpsterFees = {
   additionalWeight: { amountCents: 5000, unit: "ton" },
+  heavyMaterialOverageRange: {
+    minAmountCents: 5500,
+    maxAmountCents: 6500,
+    unit: "ton",
+  },
+  extraDay: { amountCents: 1000, unit: "day" },
+  sevenDayUpgrade: { amountCents: 2000, unit: "rental" },
+  shortTermToStandardUpgrade: { amountCents: 2500, unit: "rental" },
+  lateCancellation: { amountCents: 5000, unit: "rental" },
+  failedDelivery: { amountCents: 5000, unit: "rental" },
+  blockedPickup: { amountCents: 5000, unit: "rental" },
+  excessMileage: { amountCents: 200, unit: "mile" },
   specialtyItems: ["Mattresses", "Box springs", "Refrigerators"],
   specialtyItemAmountCents: 3000,
+  noAutomaticWeekendSurcharge: true,
   unknownConditionalFees: [
-    "Delivery-zone charges",
-    "Additional rental days",
     "Prohibited-material charges",
-    "Overloaded-container charges",
     "Applicable taxes",
+    "Relocation quotes",
+    "Damage or cleaning charges with documentation",
   ],
 } as const;
 
@@ -157,7 +177,7 @@ export const publicFaqs = [
   {
     question: "How long is the rental period?",
     answer:
-      "Each rental includes a standard rental period, with additional days available at a set daily rate subject to availability. Your included days and any additional-day rate are shown at checkout and in your rental agreement.",
+      "The 15-yard residential dumpster is available as a 48-hour rental or a standard 5-day rental. The 22-yard residential dumpster includes 5 days. Additional approved time is $10 per day, subject to availability.",
     category: "Dumpster Rentals",
   },
   {
@@ -181,7 +201,7 @@ export const publicFaqs = [
   {
     question: "Are prices different based on location?",
     answer:
-      "Yes. Delivery pricing may depend on driving distance, travel time, fuel usage, disposal-site distance, and service-zone capacity. Enter your delivery address to receive location-specific pricing.",
+      "Yes. Barnes includes the first 20 driving miles in the base rental price. Routes beyond 20 miles add $2 per excess mile, rounded on the excess portion before payment.",
     category: "Dumpster Rentals",
   },
   {
@@ -211,7 +231,7 @@ export const publicFaqs = [
   {
     question: "Do you charge for extra days?",
     answer:
-      "Yes. Rentals kept beyond the included period are charged a set additional-day rate unless an extension or long-term rate has been approved.",
+      "Yes. Approved additional rental time is $10 per calendar day. A 15-yard 48-hour rental can be upgraded to the 5-day rental for $25, and the 5-day rental can be upgraded to 7 days for $20 total.",
     category: "Dumpster Rentals",
   },
   {
@@ -229,7 +249,7 @@ export const publicFaqs = [
   {
     question: "Do you deliver on weekends?",
     answer:
-      "Weekend or after-hours delivery and pickup may be available and can include an additional charge. Contact us to confirm weekend availability for your dates.",
+      "Weekend delivery may be available based on route capacity and staff availability. There is no automatic weekend surcharge, and any exceptional fee must be disclosed before payment.",
     category: "Dumpster Rentals",
   },
   {
@@ -344,13 +364,13 @@ export const publicFaqs = [
   {
     question: "Can I dispose of mattresses?",
     answer:
-      "Mattresses and box springs may be accepted for a per-item fee that depends on local disposal costs and is shown before it applies.",
+      "Yes. Mattresses and box springs are $30 each and must be declared before pickup or booking completion.",
     category: "Accepted & Prohibited Materials",
   },
   {
     question: "Can I dispose of refrigerators or air conditioners?",
     answer:
-      "Refrigerators, freezers, air conditioners, and other refrigerant-containing appliances require special handling, and a per-appliance fee may apply.",
+      "Refrigerators and freezers are $30 each, subject to disposal-site acceptance and refrigerant-handling requirements. Contact Barnes before loading air conditioners or similar refrigerant appliances.",
     category: "Accepted & Prohibited Materials",
   },
   {

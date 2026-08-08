@@ -13,7 +13,7 @@ const twentyTwoYardRate = dumpsterRates[2];
 
 export const metadata = createPageMetadata(
   "22-yard dumpster",
-  "Review the Barnes 22-yard residential-waste dumpster dimensions, included rental period and tonnage, restrictions, and quote-required pricing.",
+  "Review the Barnes 22-yard residential-waste dumpster dimensions, included rental period and tonnage, restrictions, and approved pricing.",
   siteRoutes.dumpster22,
 );
 
@@ -22,8 +22,8 @@ export default function TwentyTwoYardPage() {
     <>
       <PageHero
         eyebrow="22-yard dumpster"
-        title="More volume. Current rate requires contact."
-        summary="The 22-yard container is listed at 7 feet wide by 14 feet long with 6-foot walls. It is for residential waste only, and its base rate is not represented as zero."
+        title="More volume. Approved 5-day pricing."
+        summary="The 22-yard container is listed at 7 feet wide by 14 feet long with 6-foot walls. It is for residential waste only and uses the approved July 23, 2026 five-day rate."
         primaryAction={{ label: "Review the booking process", href: siteRoutes.book }}
         secondaryAction={{ label: "Compare all dumpsters", href: siteRoutes.dumpsterRental }}
       />
@@ -33,17 +33,16 @@ export default function TwentyTwoYardPage() {
           <div className={styles.splitGrid}>
             <DumpsterCard rate={twentyTwoYardRate} />
             <div className={styles.prose}>
-              <h2>Confirmed terms, with one important unknown.</h2>
+              <h2>Confirmed terms.</h2>
               <p>
-                The rental period is five days and includes up to three tons of
-                disposal. Additional weight is
-                {" "}{formatCents(dumpsterFees.additionalWeight.amountCents)} per
-                ton after three tons.
+                The rental period is five days and includes 3 tons of disposal.
+                Additional weight is {formatCents(dumpsterFees.additionalWeight.amountCents)}
+                {" "}per ton after the included 3 tons.
               </p>
               <p>
-                The current base price has not been confirmed. It must remain
-                <strong> “Contact for current rate”</strong> until Barnes approves
-                a real amount and effective date.
+                The approved residential base price is {formatCents(32500)} for
+                the full 5-day rental period, before any excess-mile delivery
+                charge, specialty items, taxes, or documented conditional fees.
               </p>
               <Callout>
                 <h3>Residential waste only</h3>
@@ -58,9 +57,9 @@ export default function TwentyTwoYardPage() {
       </section>
 
       <CtaBand
-        title="Need a confirmed 22-yard rate?"
-        text="Use the verified email on the contact page to ask about the current rate. The booking entry page explains the future confirmation process without creating a reservation."
-        primary={{ label: "See booking status", href: siteRoutes.book }}
+        title="Need the larger residential container?"
+        text="Use the booking flow to confirm delivery distance and review the approved 22-yard rental total before payment."
+        primary={{ label: "See booking options", href: siteRoutes.book }}
         secondary={{ label: "Review 15-yard pricing", href: siteRoutes.dumpster15 }}
       />
     </>

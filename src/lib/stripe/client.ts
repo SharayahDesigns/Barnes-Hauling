@@ -24,3 +24,7 @@ export function getStripe(): Stripe {
 export function isStripeConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY);
 }
+
+export function isStripeTestMode(): boolean {
+  return process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ?? false;
+}

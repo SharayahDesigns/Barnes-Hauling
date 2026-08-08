@@ -748,6 +748,7 @@ export type Database = {
           purchase_date: string | null
           rental_duration_days: number[]
           rental_price_cents: number | null
+          service_item_id: string | null
           status: Database["public"]["Enums"]["dumpster_status"]
           updated_at: string
         }
@@ -768,6 +769,7 @@ export type Database = {
           purchase_date?: string | null
           rental_duration_days?: number[]
           rental_price_cents?: number | null
+          service_item_id?: string | null
           status?: Database["public"]["Enums"]["dumpster_status"]
           updated_at?: string
         }
@@ -788,6 +790,7 @@ export type Database = {
           purchase_date?: string | null
           rental_duration_days?: number[]
           rental_price_cents?: number | null
+          service_item_id?: string | null
           status?: Database["public"]["Enums"]["dumpster_status"]
           updated_at?: string
         }
@@ -797,6 +800,13 @@ export type Database = {
             columns: ["dumpster_size_id"]
             isOneToOne: false
             referencedRelation: "dumpster_sizes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dumpsters_service_item_id_fkey"
+            columns: ["service_item_id"]
+            isOneToOne: false
+            referencedRelation: "service_items"
             referencedColumns: ["id"]
           },
         ]

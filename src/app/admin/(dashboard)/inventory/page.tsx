@@ -22,6 +22,7 @@ type DumpsterRow = {
   id: string;
   asset_number: string;
   status: string;
+  service_item_id: string | null;
   current_location: string | null;
   condition_notes: string | null;
   image_path: string | null;
@@ -40,6 +41,10 @@ type DumpsterRow = {
     length_feet: number | null;
     width_feet: number | null;
     wall_height_feet: number | null;
+  } | null;
+  service_items: {
+    id: string;
+    name: string;
   } | null;
   dumpster_assignments:
     | DumpsterAssignmentRow[]
@@ -64,6 +69,12 @@ type DumpsterAssignmentRow = {
 };
 
 const activeAssignmentStatuses = new Set(["reserved", "assigned"]);
+const manualUnavailableStatuses = new Set([
+  "inspection_required",
+  "maintenance",
+  "unavailable",
+  "retired",
+]);
 
 function LockIcon() {
   return (
@@ -100,6 +111,41 @@ function formatDate(value: string): string {
     dateStyle: "medium",
     timeZone: "America/Denver",
   }).format(new Date(value));
+}
+
+function formatDenverDateKey(value: string | Date): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Denver",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(typeof value === "string" ? new Date(value) : value);
+}
+
+function isAssignmentActiveOnDate(
+  assignment: DumpsterAssignmentRow,
+  dateKey: string,
+): boolean {
+  const startsOn = formatDenverDateKey(assignment.starts_at);
+  const endsOn = formatDenverDateKey(assignment.ends_at);
+  return startsOn <= dateKey && dateKey <= endsOn;
+}
+
+function resolveDisplayStatus(
+  dumpsterStatus: string,
+  assignment: DumpsterAssignmentRow | null,
+): string {
+  if (manualUnavailableStatuses.has(dumpsterStatus)) {
+    return dumpsterStatus;
+  }
+
+  if (assignment) {
+    return "reserved";
+  }
+
+  return "available";
 }
 
 function formatAvailability(
@@ -143,23 +189,40 @@ function canDeleteDumpster(dumpster: DumpsterRow): boolean {
 
 export default async function InventoryPage() {
   const supabase = createAdminClient();
+  const todayDenver = formatDenverDateKey(new Date());
 
-  const [dumpstersResult, sizesResult, assignmentsResult, historyResult] =
+  const [enhancedDumpstersResult, sizesResult, serviceItemsResult, assignmentsResult, historyResult] =
     await Promise.all([
-    supabase
-      .from("dumpsters")
-      .select(
-        "id, asset_number, status, current_location, condition_notes, image_path, materials_allowed, materials_not_allowed, rental_duration_days, max_weight_tons, rental_price_cents, dumpster_sizes(id, name, length_feet, width_feet, wall_height_feet), dumpster_assignments(status, starts_at, ends_at, bookings(booking_number, customer_addresses(address_line_1, city)))",
-      )
-      .order("asset_number"),
-    supabase
-      .from("dumpster_sizes")
-      .select("id, name")
-      .eq("status", "active")
-      .order("capacity_cubic_yards"),
-    supabase.from("dumpster_assignments").select("id, dumpster_id, status"),
-    supabase.from("dumpster_status_history").select("id, dumpster_id"),
-  ]);
+      supabase
+        .from("dumpsters")
+        .select(
+          "id, asset_number, status, service_item_id, current_location, condition_notes, image_path, materials_allowed, materials_not_allowed, rental_duration_days, max_weight_tons, rental_price_cents, dumpster_sizes(id, name, length_feet, width_feet, wall_height_feet), service_items(id, name), dumpster_assignments(status, starts_at, ends_at, bookings(booking_number, customer_addresses(address_line_1, city)))",
+        )
+        .order("asset_number"),
+      supabase
+        .from("dumpster_sizes")
+        .select("id, name")
+        .eq("status", "active")
+        .order("capacity_cubic_yards"),
+      supabase
+        .from("service_items")
+        .select("id, name")
+        .eq("item_kind", "rental_package")
+        .eq("status", "active")
+        .order("sort_order"),
+      supabase.from("dumpster_assignments").select("id, dumpster_id, status"),
+      supabase.from("dumpster_status_history").select("id, dumpster_id"),
+    ]);
+  const supportsServiceItemAssignments = !enhancedDumpstersResult.error;
+
+  const dumpstersResult = !supportsServiceItemAssignments
+    ? await supabase
+        .from("dumpsters")
+        .select(
+          "id, asset_number, status, current_location, condition_notes, image_path, materials_allowed, materials_not_allowed, rental_duration_days, max_weight_tons, rental_price_cents, dumpster_sizes(id, name, length_feet, width_feet, wall_height_feet), dumpster_assignments(status, starts_at, ends_at, bookings(booking_number, customer_addresses(address_line_1, city)))",
+        )
+        .order("asset_number")
+    : enhancedDumpstersResult;
 
   const assignmentCountByDumpster = new Map<string, number>();
   const activeAssignmentCountByDumpster = new Map<string, number>();
@@ -187,18 +250,51 @@ export default async function InventoryPage() {
     );
   }
 
-  const dumpsters = (((dumpstersResult.data as DumpsterRow[] | null) ?? []).map((dumpster) => ({
-    ...dumpster,
-    assignment_count: assignmentCountByDumpster.get(dumpster.id) ?? 0,
-    active_assignment_count: activeAssignmentCountByDumpster.get(dumpster.id) ?? 0,
-    status_history_count: historyCountByDumpster.get(dumpster.id) ?? 0,
-    image_public_url: dumpster.image_path
-      ? supabase.storage
-          .from(DUMPSTER_IMAGE_BUCKET)
-          .getPublicUrl(dumpster.image_path).data.publicUrl
-      : null,
-  })) as DumpsterRow[]) ?? [];
+  const dumpsters = ((((dumpstersResult.data as DumpsterRow[] | null) ?? []).map(
+    (dumpster) => ({
+      ...dumpster,
+      service_item_id: dumpster.service_item_id ?? null,
+      service_items: dumpster.service_items ?? null,
+      assignment_count: assignmentCountByDumpster.get(dumpster.id) ?? 0,
+      active_assignment_count: activeAssignmentCountByDumpster.get(dumpster.id) ?? 0,
+      status_history_count: historyCountByDumpster.get(dumpster.id) ?? 0,
+      image_public_url: dumpster.image_path
+        ? supabase.storage
+            .from(DUMPSTER_IMAGE_BUCKET)
+            .getPublicUrl(dumpster.image_path).data.publicUrl
+        : null,
+    }),
+  )) as DumpsterRow[]) ?? [];
+  // Ready-to-rent containers first, retired last. Display status is resolved
+  // here rather than during render so the list can be ordered by it.
+  const statusRank = (status: string): number => {
+    if (status === "available") return 0;
+    if (status === "reserved") return 1;
+    if (status === "retired") return 3;
+    return 2;
+  };
+
+  const inventory = dumpsters
+    .map((dumpster) => {
+      const activeAssignment =
+        dumpster.dumpster_assignments?.find(
+          (assignment) =>
+            activeAssignmentStatuses.has(assignment.status) &&
+            isAssignmentActiveOnDate(assignment, todayDenver),
+        ) ?? null;
+      return {
+        dumpster,
+        activeAssignment,
+        displayStatus: resolveDisplayStatus(dumpster.status, activeAssignment),
+      };
+    })
+    // Stable sort, so asset_number order from the query is preserved within a
+    // status group.
+    .sort((a, b) => statusRank(a.displayStatus) - statusRank(b.displayStatus));
+
   const sizes = (sizesResult.data as Array<{ id: string; name: string }> | null) ?? [];
+  const serviceItems =
+    (serviceItemsResult.data as Array<{ id: string; name: string }> | null) ?? [];
 
   return (
     <>
@@ -209,7 +305,19 @@ export default async function InventoryPage() {
         </p>
       </div>
 
-      <AddDumpsterForm sizes={sizes} />
+      {!supportsServiceItemAssignments ? (
+        <p className={styles.notice} role="status">
+          Booking package assignments are not saving in this environment because the
+          `dumpsters.service_item_id` column is missing from the live database. Price
+          and inventory edits still save normally.
+        </p>
+      ) : null}
+
+      <AddDumpsterForm
+        sizes={sizes}
+        serviceItems={serviceItems}
+        supportsServiceItemAssignments={supportsServiceItemAssignments}
+      />
 
       {dumpsters.length === 0 ? (
         <div className={styles.tableWrap}>
@@ -219,22 +327,20 @@ export default async function InventoryPage() {
         </div>
       ) : (
         <ul className={styles.inventoryGrid}>
-          {dumpsters.map((dumpster) => {
-            const activeAssignment =
-              dumpster.dumpster_assignments?.find((assignment) =>
-                activeAssignmentStatuses.has(assignment.status),
-              ) ?? null;
+          {inventory.map(({ dumpster, activeAssignment, displayStatus }) => {
             const booking = activeAssignment?.bookings ?? null;
             const address = booking?.customer_addresses ?? null;
 
             return (
               <li
                 className={`${styles.inventoryCard} ${
-                  dumpster.status === "available"
+                  displayStatus === "available"
                     ? styles.inventoryCardAvailable
-                    : dumpster.status === "reserved"
+                    : displayStatus === "reserved"
                       ? styles.inventoryCardReserved
-                      : ""
+                      : displayStatus === "retired"
+                        ? styles.inventoryCardRetired
+                        : ""
                 }`}
                 key={dumpster.id}
               >
@@ -260,18 +366,21 @@ export default async function InventoryPage() {
                     </p>
                     <p className={styles.inventoryCardMeta}>
                       {dumpster.dumpster_sizes?.name ?? "—"}
+                      {dumpster.service_items?.name
+                        ? ` • ${dumpster.service_items.name}`
+                        : ""}
                     </p>
                   </div>
                   <span
                     className={`${styles.statusPill} ${styles.inventoryCardStatus} ${
-                      dumpster.status === "available"
+                      displayStatus === "available"
                         ? styles.statusPillAvailable
-                        : dumpster.status === "reserved"
+                        : displayStatus === "reserved"
                           ? styles.statusPillReserved
                           : ""
                     }`}
                   >
-                    {humanizeStatus(dumpster.status)}
+                    {humanizeStatus(displayStatus)}
                   </span>
                 </div>
 
@@ -307,13 +416,13 @@ export default async function InventoryPage() {
                   <div>
                     <dt>Availability</dt>
                     <dd>
-                      {!activeAssignment && dumpster.status === "available" ? (
+                      {displayStatus === "available" ? (
                         <span className={styles.availableNow}>
                           <CheckCircleIcon />
                           Available now
                         </span>
                       ) : (
-                        formatAvailability(dumpster.status, activeAssignment)
+                        formatAvailability(displayStatus, activeAssignment)
                       )}
                     </dd>
                   </div>
@@ -347,10 +456,12 @@ export default async function InventoryPage() {
                 </dl>
 
                 <EditDetailsForm
-                  dumpster={{
-                    id: dumpster.id,
-                    dumpsterSizeId: dumpster.dumpster_sizes?.id ?? "",
-                    assetNumber: dumpster.asset_number,
+                    dumpster={{
+                      id: dumpster.id,
+                      dumpsterSizeId: dumpster.dumpster_sizes?.id ?? "",
+                      serviceItemId: dumpster.service_item_id,
+                      assetNumber: dumpster.asset_number,
+                      imagePublicUrl: dumpster.image_public_url ?? null,
                     currentLocation: dumpster.current_location,
                     conditionNotes: dumpster.condition_notes,
                     imagePath: dumpster.image_path,
@@ -362,7 +473,9 @@ export default async function InventoryPage() {
                     lengthFeet: dumpster.dumpster_sizes?.length_feet ?? null,
                     widthFeet: dumpster.dumpster_sizes?.width_feet ?? null,
                     wallHeightFeet: dumpster.dumpster_sizes?.wall_height_feet ?? null,
-                  }}
+                    }}
+                    serviceItems={serviceItems}
+                    supportsServiceItemAssignments={supportsServiceItemAssignments}
                 />
 
                 <div className={styles.inventoryCardActions}>

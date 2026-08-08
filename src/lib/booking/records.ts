@@ -215,9 +215,24 @@ export type CustomerAndAddress = {
   serviceArea: ServiceAreaResult;
 };
 
+type CustomerAndAddressInput = Pick<
+  BookingDraftInput,
+  | "postalCode"
+  | "addressLine1"
+  | "addressLine2"
+  | "city"
+  | "region"
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "phone"
+  | "placementLatitude"
+  | "placementLongitude"
+>;
+
 export async function createCustomerAndAddress(
   supabase: AdminDb,
-  input: BookingDraftInput,
+  input: CustomerAndAddressInput,
 ): Promise<CustomerAndAddress> {
   const serviceArea = await checkServiceArea({
     postalCode: input.postalCode,

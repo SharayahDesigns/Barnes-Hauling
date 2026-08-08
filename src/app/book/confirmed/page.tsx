@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 import { siteRoutes } from "@/config/site";
-import { formatCents } from "@/config/public-content";
 import { createPageMetadata } from "@/lib/page-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import styles from "../booking-flow.module.scss";
+import { SettlingRefresh } from "./settling-refresh";
 
 export const metadata = createPageMetadata(
   "Booking received",
@@ -17,8 +17,23 @@ export const metadata = createPageMetadata(
 type PaymentRecord = {
   status: string;
   amount_cents: number;
-  bookings: { booking_number: number } | null;
+  is_test_mode: boolean;
+  metadata: Record<string, unknown> | null;
+  bookings: { booking_number: number; status: string } | null;
 };
+
+// Receipts show exact cents; formatCents rounds to whole dollars for marketing
+// copy, which would misstate a settled total.
+const EXACT_USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatExactCents(amountCents: number): string {
+  return EXACT_USD.format(amountCents / 100);
+}
 
 export default async function BookingConfirmedPage({
   searchParams,
@@ -32,14 +47,23 @@ export default async function BookingConfirmedPage({
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("payments")
-      .select("status, amount_cents, bookings(booking_number)")
+      .select(
+        "status, amount_cents, is_test_mode, metadata, bookings(booking_number, status)",
+      )
       .eq("stripe_checkout_session_id", sessionId)
       .maybeSingle();
-    payment = (data as PaymentRecord | null) ?? null;
+    payment = (data as unknown as PaymentRecord | null) ?? null;
   }
 
   const bookingNumber = payment?.bookings?.booking_number ?? null;
   const settled = payment?.status === "succeeded";
+  const confirmed = payment?.bookings?.status === "confirmed";
+
+  // Stripe's settled breakdown, captured by the webhook.
+  const taxCents = Number(payment?.metadata?.checkout_total_tax_cents ?? 0);
+  const subtotalCents = Number(
+    payment?.metadata?.checkout_subtotal_cents ?? payment?.amount_cents ?? 0,
+  );
 
   return (
     <div className={styles.wrapper}>
@@ -49,26 +73,38 @@ export default async function BookingConfirmedPage({
             ✓
           </span>
           <h1 className={styles.stepTitle}>
-            {settled ? "Payment received" : "Booking received"}
+            {confirmed
+              ? "Booking confirmed"
+              : settled
+                ? "Payment received"
+                : "Booking received"}
           </h1>
           {bookingNumber !== null && (
             <p className={styles.confirmationNumber}>Booking #{bookingNumber}</p>
           )}
           <p className={styles.stepSummary}>
-            {settled
-              ? "Thanks — your payment went through. Our team will review the details, confirm your delivery date, and finalize your total."
-              : "Thanks — we've received your request. Once your payment settles, we'll review the details and confirm your delivery date."}
+            {confirmed
+              ? "Thanks — your payment went through and your booking is confirmed. We'll be in touch with your delivery window before your date."
+              : settled
+                ? "Thanks — your payment went through. Our team will review the details, confirm your delivery date, and finalize your total."
+                : "Thanks — we've received your request. We're finalizing your payment now; this page updates on its own."}
           </p>
+          {/* Stripe's redirect often arrives before its webhook does. */}
+          {sessionId && !settled ? <SettlingRefresh /> : null}
           {payment && (
             <p className={styles.helpText}>
-              Base rental paid: {formatCents(payment.amount_cents)}. Taxes and any
-              delivery charge are confirmed before your booking is finalized. A
-              copy of your rental agreement will be emailed to you.
+              {taxCents > 0
+                ? `Subtotal ${formatExactCents(subtotalCents)} + tax ${formatExactCents(taxCents)} = `
+                : "Payment total: "}
+              {formatExactCents(payment.amount_cents)}. A copy of your rental
+              agreement will be emailed to you.
             </p>
           )}
           <p className={styles.helpText}>
-            This is a test-mode booking; your booking is confirmed only after
-            Barnes review. Questions? Call or text 385-246-4219.
+            {payment?.is_test_mode
+              ? "This Stripe sandbox payment is for testing only. Your booking is still subject to Barnes review before scheduling."
+              : "Your booking is still subject to Barnes review before scheduling."}{" "}
+            Questions? Call or text 385-246-4219.
           </p>
           <Link className={styles.secondaryButton} href={siteRoutes.home}>
             Return home

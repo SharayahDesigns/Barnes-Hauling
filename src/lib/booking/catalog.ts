@@ -4,40 +4,38 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
   getBookingSizeOption,
-  STATIC_BOOKING_SIZE_OPTIONS,
   type BookingSizeOption,
 } from "./options";
 import type { SizeKey } from "./schema";
 
-type PricingRow = {
-  service_items: Array<{ code: string | null }> | null;
-  pricing_rule_versions:
-    | Array<{
-        value_type: string;
-        amount_cents: number | null;
-        pricing_versions: Array<{
-          version_number: number;
-          status: string;
-          published_at: string | null;
-          created_at: string;
-        }> | null;
-      }>
-    | null;
-};
-
-type ImageRow = {
+type ServiceItemRow = {
+  id: string;
   code: string;
+  name: string;
+  description: string | null;
   image_path: string | null;
+  default_rental_days: number | null;
+  dumpster_size_id: string | null;
+  sort_order: number;
+  dumpster_sizes: {
+    name: string;
+    capacity_cubic_yards: number | null;
+    length_feet: number | null;
+    width_feet: number | null;
+    wall_height_feet: number | null;
+  } | null;
 };
 
-type DumpsterImageRow = {
+type DumpsterRow = {
+  asset_number: string;
   dumpster_size_id: string | null;
+  service_item_id: string | null;
   image_path: string | null;
-};
-
-type DumpsterDurationRow = {
-  dumpster_size_id: string | null;
+  rental_price_cents: number | null;
+  max_weight_tons: number | null;
   rental_duration_days: number[] | null;
+  materials_allowed: string[] | null;
+  materials_not_allowed: string[] | null;
 };
 
 function resolvePublicImageUrl(
@@ -55,171 +53,236 @@ function resolvePublicImageUrl(
     .publicUrl;
 }
 
-function pricingVersionRank(status: string): number {
-  if (status === "published") return 3;
-  if (status === "draft") return 2;
-  if (status === "retired") return 1;
-  return 0;
-}
+function formatDimensions(
+  size:
+    | {
+        length_feet: number | null;
+        width_feet: number | null;
+        wall_height_feet: number | null;
+        capacity_cubic_yards: number | null;
+      }
+    | null
+    | undefined,
+): string {
+  if (!size) return "";
 
-function resolvePriceForRows(rows: PricingRow[]): Partial<Record<SizeKey, BookingSizeOption["price"]>> {
-  const result: Partial<Record<SizeKey, BookingSizeOption["price"]>> = {};
-
-  for (const row of rows) {
-    const code = row.service_items?.[0]?.code;
-    if (!code) continue;
-
-    const key =
-      code === "dumpster_15_residential"
-        ? "15-residential"
-        : code === "dumpster_15_heavy_materials"
-          ? "15-heavy"
-          : code === "dumpster_22_residential"
-            ? "22-residential"
-            : null;
-    if (!key) continue;
-
-    const candidates = (row.pricing_rule_versions ?? [])
-      .map((version) => {
-        const pricingVersion = version.pricing_versions?.[0] ?? null;
-        if (!pricingVersion) return null;
-
-        const price =
-          version.value_type === "fixed_amount" && version.amount_cents != null
-            ? { type: "fixed" as const, amountCents: version.amount_cents }
-            : version.value_type === "quote_required"
-              ? { type: "quote_required" as const, label: "Contact for current rate" as const }
-              : null;
-
-        if (!price) return null;
-
-        return {
-          price,
-          rank: pricingVersionRank(pricingVersion.status),
-          versionNumber: pricingVersion.version_number,
-          publishedAt: pricingVersion.published_at ?? "",
-          createdAt: pricingVersion.created_at,
-        };
-      })
-      .filter((candidate) => candidate !== null)
-      .sort((a, b) => {
-        if (b.rank !== a.rank) return b.rank - a.rank;
-        if (b.versionNumber !== a.versionNumber) return b.versionNumber - a.versionNumber;
-        if (b.publishedAt !== a.publishedAt) return b.publishedAt.localeCompare(a.publishedAt);
-        return b.createdAt.localeCompare(a.createdAt);
-      });
-
-    if (candidates[0]) {
-      result[key] = candidates[0].price;
-    }
+  if (size.length_feet && size.width_feet) {
+    const walls = size.wall_height_feet ? ` × ${size.wall_height_feet} ft walls` : "";
+    return `${size.width_feet} ft × ${size.length_feet} ft${walls}`;
   }
 
-  return result;
+  if (size.capacity_cubic_yards) {
+    return `${size.capacity_cubic_yards} cu yd`;
+  }
+
+  return "";
+}
+
+function formatIncludedWeightLabel(maxWeightTons: number | null): string {
+  if (maxWeightTons == null) return "Weight limit set by staff review";
+  return `${maxWeightTons} ton${maxWeightTons === 1 ? "" : "s"} included`;
+}
+
+function formatMaterialRules(
+  allowed: string[] | null,
+  notAllowed: string[] | null,
+): string[] {
+  const rules: string[] = [];
+
+  for (const item of allowed ?? []) {
+    const trimmed = item.trim();
+    if (trimmed) rules.push(trimmed);
+  }
+
+  for (const item of notAllowed ?? []) {
+    const trimmed = item.trim();
+    if (trimmed) rules.push(`No ${trimmed}`);
+  }
+
+  return rules;
+}
+
+function chooseRepresentativeDumpster(
+  dumpsters: DumpsterRow[],
+): DumpsterRow | undefined {
+  return [...dumpsters].sort((a, b) => {
+    const priceA = a.rental_price_cents ?? Number.MAX_SAFE_INTEGER;
+    const priceB = b.rental_price_cents ?? Number.MAX_SAFE_INTEGER;
+    if (priceA !== priceB) return priceA - priceB;
+
+    const weightA = a.max_weight_tons ?? Number.MAX_SAFE_INTEGER;
+    const weightB = b.max_weight_tons ?? Number.MAX_SAFE_INTEGER;
+    if (weightA !== weightB) return weightA - weightB;
+
+    return a.asset_number.localeCompare(b.asset_number);
+  })[0];
 }
 
 export async function loadBookingSizeOptions(): Promise<readonly BookingSizeOption[]> {
   const supabase = createAdminClient();
-  const [pricingResult, sizeResult, imageResult, dumpsterImageResult, durationResult] = await Promise.all([
-    supabase
-      .from("pricing_rules")
-      .select(
-        "service_items(code), pricing_rule_versions(value_type, amount_cents, pricing_versions(version_number, status, published_at, created_at))",
-      )
-      .eq("rule_kind", "base_price")
-      .eq("is_active", true),
-    supabase.from("service_items").select("code, dumpster_size_id"),
+  const [serviceItemsResult, enhancedDumpstersResult] = await Promise.all([
     supabase
       .from("service_items")
-      .select("code, image_path")
-      .not("image_path", "is", null)
+      .select(
+        "id, code, name, description, image_path, default_rental_days, sort_order, dumpster_size_id, dumpster_sizes(name, capacity_cubic_yards, length_feet, width_feet, wall_height_feet)",
+      )
+      .eq("item_kind", "rental_package")
+      .eq("status", "active")
       .order("sort_order"),
     supabase
       .from("dumpsters")
-      .select("dumpster_size_id, image_path")
-      .not("image_path", "is", null)
-      .neq("status", "retired"),
-    supabase
-      .from("dumpsters")
-      .select("dumpster_size_id, rental_duration_days")
+      .select(
+        "asset_number, dumpster_size_id, service_item_id, image_path, rental_price_cents, max_weight_tons, rental_duration_days, materials_allowed, materials_not_allowed",
+      )
       .neq("status", "retired"),
   ]);
 
-  if (
-    pricingResult.error ||
-    sizeResult.error ||
-    imageResult.error ||
-    dumpsterImageResult.error ||
-    durationResult.error
-  ) {
-    return STATIC_BOOKING_SIZE_OPTIONS;
+  if (serviceItemsResult.error) {
+    return [];
   }
 
-  const pricingByKey = resolvePriceForRows(
-    ((pricingResult.data as unknown) as PricingRow[] | null) ?? [],
+  const supportsServiceItemAssignments = !enhancedDumpstersResult.error;
+  const dumpstersResult = supportsServiceItemAssignments
+    ? enhancedDumpstersResult
+    : await supabase
+        .from("dumpsters")
+        .select(
+          "asset_number, dumpster_size_id, image_path, rental_price_cents, max_weight_tons, rental_duration_days, materials_allowed, materials_not_allowed",
+        )
+        .neq("status", "retired");
+
+  const serviceItems =
+    ((serviceItemsResult.data as unknown) as ServiceItemRow[] | null) ?? [];
+  const dumpsters = (
+    (((dumpstersResult.data as unknown) as DumpsterRow[] | null) ?? []).map((row) => ({
+      ...row,
+      service_item_id: row.service_item_id ?? null,
+      asset_number: row.asset_number.trim().toUpperCase(),
+    }))
   );
-  const sizeIdByCode = new Map(
-    ((sizeResult.data as Array<{ code: string; dumpster_size_id: string | null }> | null) ?? [])
-      .filter((item) => item.dumpster_size_id)
-      .map((item) => [item.code, item.dumpster_size_id as string]),
-  );
 
-  const imageRows = (((imageResult.data as unknown) as ImageRow[] | null) ?? []);
-  const imageByCode = new Map<string, string>();
-  const imageBySizeId = new Map<string, string>();
-
-  for (const row of imageRows) {
-    if (!row.image_path) continue;
-    imageByCode.set(row.code, resolvePublicImageUrl(supabase, row.image_path));
-  }
-
-  for (const row of ((dumpsterImageResult.data as DumpsterImageRow[] | null) ?? [])) {
-    if (!row.dumpster_size_id || !row.image_path || imageBySizeId.has(row.dumpster_size_id)) {
-      continue;
-    }
-    imageBySizeId.set(
-      row.dumpster_size_id,
-      resolvePublicImageUrl(supabase, row.image_path),
+  const serviceItemCountBySizeId = new Map<string, number>();
+  for (const item of serviceItems) {
+    if (!item.dumpster_size_id) continue;
+    serviceItemCountBySizeId.set(
+      item.dumpster_size_id,
+      (serviceItemCountBySizeId.get(item.dumpster_size_id) ?? 0) + 1,
     );
   }
-
-  const durationOptionsBySizeId = new Map<string, number[]>();
-  for (const row of ((durationResult.data as DumpsterDurationRow[] | null) ?? [])) {
-    if (!row.dumpster_size_id) continue;
-    const current = durationOptionsBySizeId.get(row.dumpster_size_id) ?? [];
-    const next = new Set(current);
-    for (const value of row.rental_duration_days ?? []) {
-      if (Number.isInteger(value) && value > 0) {
-        next.add(value);
-      }
+  const dumpstersByServiceItemId = new Map<string, DumpsterRow[]>();
+  const dumpstersBySizeId = new Map<string, DumpsterRow[]>();
+  const unassignedDumpstersBySizeId = new Map<string, DumpsterRow[]>();
+  for (const dumpster of dumpsters) {
+    if (dumpster.service_item_id) {
+      const serviceItemList =
+        dumpstersByServiceItemId.get(dumpster.service_item_id) ?? [];
+      serviceItemList.push(dumpster);
+      dumpstersByServiceItemId.set(dumpster.service_item_id, serviceItemList);
     }
-    durationOptionsBySizeId.set(
-      row.dumpster_size_id,
-      [...next].sort((a, b) => a - b),
-    );
+    if (!dumpster.dumpster_size_id) continue;
+    const list = dumpstersBySizeId.get(dumpster.dumpster_size_id) ?? [];
+    list.push(dumpster);
+    dumpstersBySizeId.set(dumpster.dumpster_size_id, list);
+    if (!dumpster.service_item_id) {
+      const unassignedList =
+        unassignedDumpstersBySizeId.get(dumpster.dumpster_size_id) ?? [];
+      unassignedList.push(dumpster);
+      unassignedDumpstersBySizeId.set(dumpster.dumpster_size_id, unassignedList);
+    }
   }
 
-  return STATIC_BOOKING_SIZE_OPTIONS.map((option) => {
-    const serviceItemCode =
-      option.key === "15-residential"
-        ? "dumpster_15_residential"
-        : option.key === "15-heavy"
-          ? "dumpster_15_heavy_materials"
-          : "dumpster_22_residential";
-    const sizeId = sizeIdByCode.get(serviceItemCode) ?? "";
-    const livePrice = pricingByKey[option.key] ?? option.price;
+  const serviceItemsBySizeId = new Map<string, ServiceItemRow[]>();
+  for (const serviceItem of serviceItems) {
+    if (!serviceItem.dumpster_size_id) continue;
+    const list = serviceItemsBySizeId.get(serviceItem.dumpster_size_id) ?? [];
+    list.push(serviceItem);
+    serviceItemsBySizeId.set(serviceItem.dumpster_size_id, list);
+  }
+
+  return serviceItems.flatMap((serviceItem) => {
+    if (!serviceItem.dumpster_size_id) return [];
+    const packageCountForSize =
+      serviceItemCountBySizeId.get(serviceItem.dumpster_size_id) ?? 0;
+    const dumpstersForServiceItem = serviceItem?.id
+      ? (dumpstersByServiceItemId.get(serviceItem.id) ?? [])
+      : [];
+    const dumpstersForSize = serviceItem?.dumpster_size_id
+      ? (dumpstersBySizeId.get(serviceItem.dumpster_size_id) ?? [])
+      : [];
+    const sortedUnassignedDumpsters = [
+      ...(unassignedDumpstersBySizeId.get(serviceItem.dumpster_size_id) ?? []),
+    ].sort((a, b) => {
+      const priceA = a.rental_price_cents ?? Number.MAX_SAFE_INTEGER;
+      const priceB = b.rental_price_cents ?? Number.MAX_SAFE_INTEGER;
+      if (priceA !== priceB) return priceA - priceB;
+
+      const weightA = a.max_weight_tons ?? Number.MAX_SAFE_INTEGER;
+      const weightB = b.max_weight_tons ?? Number.MAX_SAFE_INTEGER;
+      if (weightA !== weightB) return weightA - weightB;
+
+      return a.asset_number.localeCompare(b.asset_number);
+    });
+    const sortedServiceItemsForSize = [
+      ...(serviceItemsBySizeId.get(serviceItem.dumpster_size_id) ?? []),
+    ].sort((a, b) => a.sort_order - b.sort_order);
+    const unassignedServiceItemsForSize = sortedServiceItemsForSize.filter(
+      (item) => (dumpstersByServiceItemId.get(item.id)?.length ?? 0) === 0,
+    );
+    const fallbackDumpster =
+      supportsServiceItemAssignments && packageCountForSize > 1
+        ? sortedUnassignedDumpsters[
+            unassignedServiceItemsForSize.findIndex((item) => item.id === serviceItem.id)
+          ]
+        : chooseRepresentativeDumpster(dumpstersForSize);
+    const dumpster = chooseRepresentativeDumpster(
+      dumpstersForServiceItem.length > 0 ? dumpstersForServiceItem : fallbackDumpster ? [fallbackDumpster] : [],
+    );
+    if (!dumpster && dumpstersForSize.length === 0) {
+      return [];
+    }
     const rentalDayOptions =
-      durationOptionsBySizeId.get(sizeId)?.filter(
+      dumpster?.rental_duration_days?.filter(
         (value) => Number.isInteger(value) && value > 0,
-      ) ?? option.rentalDayOptions;
+      ) ??
+      (serviceItem.default_rental_days && serviceItem.default_rental_days > 0
+        ? [serviceItem.default_rental_days]
+        : []);
+    if (rentalDayOptions.length === 0) return [];
+    const livePrice =
+      dumpster?.rental_price_cents != null
+        ? { type: "fixed" as const, amountCents: dumpster.rental_price_cents }
+        : {
+            type: "quote_required" as const,
+            label: serviceItem?.description?.trim() || "Contact for current rate",
+          };
+    const dimensions = formatDimensions(serviceItem?.dumpster_sizes);
+    const imagePath =
+      dumpster?.image_path?.trim() || serviceItem.image_path?.trim()
+        ? (dumpster?.image_path?.trim() || serviceItem.image_path?.trim() || null)
+        : null;
+    const image = imagePath ? resolvePublicImageUrl(supabase, imagePath) : "";
+    const includedTons = dumpster?.max_weight_tons ?? null;
+    const materialRules = formatMaterialRules(
+      dumpster?.materials_allowed ?? null,
+      dumpster?.materials_not_allowed ?? null,
+    );
+    const use = serviceItem.description?.trim() ?? "";
+    const rentalDays = rentalDayOptions[0] ?? null;
+    if (!rentalDays) return [];
 
-    return {
-      ...option,
-      rentalDays: rentalDayOptions[0] ?? option.rentalDays,
-      rentalDayOptions:
-        rentalDayOptions.length > 0 ? rentalDayOptions : option.rentalDayOptions,
+    return [{
+      key: serviceItem.code,
+      size: serviceItem.name,
+      use,
+      dimensions,
+      rentalDays,
+      rentalDayOptions,
+      includedTons,
+      includedWeightLabel: formatIncludedWeightLabel(dumpster?.max_weight_tons ?? null),
+      materialRules,
       price: livePrice,
-      image: imageByCode.get(serviceItemCode) ?? imageBySizeId.get(sizeId) ?? option.image,
-    };
+      image,
+    }];
   });
 }
 

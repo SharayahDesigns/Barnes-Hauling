@@ -14,7 +14,13 @@ const INITIAL: InventoryFormState = {};
 
 export function AddDumpsterForm({
   sizes,
-}: Readonly<{ sizes: ReadonlyArray<{ id: string; name: string }> }>) {
+  serviceItems,
+  supportsServiceItemAssignments,
+}: Readonly<{
+  sizes: ReadonlyArray<{ id: string; name: string }>;
+  serviceItems: ReadonlyArray<{ id: string; name: string }>;
+  supportsServiceItemAssignments: boolean;
+}>) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(createDumpster, INITIAL);
 
@@ -53,6 +59,12 @@ export function AddDumpsterForm({
             {state.success}
           </p>
         )}
+        {!supportsServiceItemAssignments && (
+          <p className={styles.notice} role="status">
+            Booking package selections will not save until the
+            `dumpsters.service_item_id` database migration is applied.
+          </p>
+        )}
         <div className={styles.formGrid}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="assetNumber">
@@ -83,6 +95,27 @@ export function AddDumpsterForm({
             {sizes.map((size) => (
               <option key={size.id} value={size.id}>
                 {size.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="serviceItemId">
+            Booking package
+          </label>
+          <select
+            id="serviceItemId"
+            name="serviceItemId"
+            className={styles.select}
+            defaultValue=""
+            required
+          >
+            <option value="" disabled>
+              Choose a package
+            </option>
+            {serviceItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
               </option>
             ))}
           </select>

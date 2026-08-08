@@ -49,8 +49,7 @@ export type DeliveryAvailability = {
 export type CheckoutResult =
   | {
       ok: true;
-      bookingNumber: number;
-      serviceAreaConfirmed: boolean;
+      checkoutUrl: string;
     }
   | {
       ok: false;

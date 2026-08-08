@@ -7,6 +7,8 @@ import { humanizeStatus } from "@/lib/admin/dumpster-status";
 import {
   assignBookingDumpster,
   deleteBooking,
+  deleteQuote,
+  refundBookingPayment,
   updateBookingStatus,
   updateQuoteStatus,
 } from "@/lib/admin/leads";
@@ -14,9 +16,11 @@ import { QUOTE_STATUSES } from "@/lib/admin/quote-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import styles from "../../admin.module.scss";
+import { AutoSubmitSelect, PendingSubmitButton } from "./auto-submit-select";
 import { AddBookingForm } from "./add-booking-form";
 import { BookingCalendar } from "./booking-calendar";
 import { denverDayKey, type CalendarBooking } from "./calendar-utils";
+import { PlacementMapsLink } from "./placement-maps-link";
 import { PlacementSnapshotMap } from "./placement-snapshot-map";
 
 export const metadata = createPageMetadata(
@@ -40,10 +44,12 @@ type QuoteRow = {
   created_at: string;
   request_details: {
     size_key?: string;
+    rental_days?: number;
     needed_date?: string;
     service_area_check?: string;
   } | null;
   customers: Customer;
+  service_items: { name: string } | null;
 };
 
 type PriceSnapshot = {
@@ -77,6 +83,7 @@ type BookingRow = {
       }
     | null;
   booking_price_snapshots: PriceSnapshot[] | null;
+  payments: PaymentRow[] | null;
   dumpster_assignments:
     | Array<{
         id: string;
@@ -84,6 +91,14 @@ type BookingRow = {
         dumpsters: { id: string; asset_number: string } | null;
       }>
     | null;
+};
+
+type PaymentRow = {
+  status: string;
+  amount_cents: number;
+  card_on_file: boolean;
+  succeeded_at: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type DumpsterOption = {
@@ -143,8 +158,17 @@ function activeDumpsterId(booking: BookingRow): string | null {
   return activeAssignment?.dumpsters?.id ?? null;
 }
 
+/**
+ * MM/DD/YYYY. Reformats the ISO date parts directly rather than going through
+ * a Date object, which would shift a timestamp near midnight into the previous
+ * or next day depending on the viewer's timezone. Accepts a full timestamp or a
+ * bare YYYY-MM-DD.
+ */
 function dateOnly(iso: string): string {
-  return iso.slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return iso;
+  const [, year, month, day] = match;
+  return `${month}/${day}/${year}`;
 }
 
 function priceLabel(snapshots: PriceSnapshot[] | null): string {
@@ -160,8 +184,83 @@ function priceLabel(snapshots: PriceSnapshot[] | null): string {
   return "—";
 }
 
-function canDeleteBooking(booking: BookingRow): boolean {
-  return booking.status === "draft" || booking.status === "cancelled";
+// Settled payments show exact cents; formatCents rounds to whole dollars.
+const EXACT_USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function latestPayment(payments: PaymentRow[] | null): PaymentRow | null {
+  if (!payments || payments.length === 0) return null;
+  // Prefer a settled payment over an abandoned checkout attempt.
+  return (
+    payments.find((payment) => payment.status === "succeeded") ?? payments[0]
+  );
+}
+
+function paidLabel(payment: PaymentRow | null): string {
+  if (!payment) return "—";
+  if (payment.status !== "succeeded") return payment.status.replace(/_/g, " ");
+  return EXACT_USD.format(payment.amount_cents / 100);
+}
+
+function refundableCents(payment: PaymentRow | null): number {
+  if (!payment || payment.status !== "succeeded") return 0;
+  const refunded =
+    typeof payment.metadata?.refunded_amount_cents === "number"
+      ? payment.metadata.refunded_amount_cents
+      : 0;
+  return Math.max(0, payment.amount_cents - refunded);
+}
+
+function refundStateLabel(payment: PaymentRow | null): string | null {
+  if (!payment) return null;
+  if (payment.status === "refunded") return "Refunded";
+  if (payment.status === "partially_refunded") {
+    const refunded =
+      typeof payment.metadata?.refunded_amount_cents === "number"
+        ? payment.metadata.refunded_amount_cents
+        : 0;
+    return `${EXACT_USD.format(refunded / 100)} refunded`;
+  }
+  // Requested but the charge.refunded webhook has not landed yet.
+  const requested = payment.metadata?.refund_requested_cents;
+  if (typeof requested === "number") {
+    return `${EXACT_USD.format(requested / 100)} refund pending`;
+  }
+  return null;
+}
+
+function paymentMethodLabel(payment: PaymentRow | null): string {
+  if (!payment) return "—";
+  const brand = payment.metadata?.card_brand;
+  const last4 = payment.metadata?.card_last4;
+  if (typeof brand === "string" && typeof last4 === "string") {
+    return `${brand.charAt(0).toUpperCase()}${brand.slice(1)} ····${last4}`;
+  }
+  return payment.card_on_file ? "Card on file" : "—";
+}
+
+/**
+ * Why this booking cannot be deleted, or null when it can be.
+ *
+ * Mirrors the guards enforced by deleteBooking on the server. Checking payments
+ * here too means a paid booking shows a lock with the reason, instead of a
+ * trash button that fails after a round trip.
+ */
+function deleteBlockReason(booking: BookingRow): string | null {
+  if (booking.status !== "draft" && booking.status !== "cancelled") {
+    return `Only draft or cancelled bookings can be deleted. Set this booking's status to Cancelled first.`;
+  }
+
+  const payment = latestPayment(booking.payments);
+  if (payment) {
+    return `This booking has a payment record (${paidLabel(payment)}), and payment history is never deletable — it is needed for tax reporting and dispute defense. Refunding it does not remove the record.`;
+  }
+
+  return null;
 }
 
 function supportsDumpsterAssignment(booking: BookingRow): boolean {
@@ -228,14 +327,14 @@ export default async function LeadsPage({
     supabase
       .from("quotes")
       .select(
-        "id, quote_number, status, created_at, request_details, customers(first_name, last_name, email, phone)",
+        "id, quote_number, status, created_at, request_details, customers(first_name, last_name, email, phone), service_items(name)",
       )
       .order("created_at", { ascending: false })
       .limit(100),
     supabase
       .from("bookings")
       .select(
-        "id, booking_number, status, service_item_id, scheduled_start_at, scheduled_end_at, created_at, customers(first_name, last_name, email, phone), customer_addresses!bookings_service_address_id_fkey(latitude, longitude), service_items(dumpster_size_id, dumpster_sizes(name)), booking_price_snapshots(total_cents, range_min_cents, range_max_cents, snapshot_type, revision_number, finalized_at), dumpster_assignments(id, status, dumpsters(id, asset_number))",
+        "id, booking_number, status, service_item_id, scheduled_start_at, scheduled_end_at, created_at, customers(first_name, last_name, email, phone), customer_addresses!bookings_service_address_id_fkey(latitude, longitude), service_items(dumpster_size_id, dumpster_sizes(name)), booking_price_snapshots(total_cents, range_min_cents, range_max_cents, snapshot_type, revision_number, finalized_at), payments(status, amount_cents, card_on_file, succeeded_at, metadata), dumpster_assignments(id, status, dumpsters(id, asset_number))",
       )
       .order("created_at", { ascending: false })
       .limit(100),
@@ -293,7 +392,9 @@ export default async function LeadsPage({
       customer: customerName(booking.customers),
       dumpster: assignedDumpsterLabel(booking),
     }));
-  const initialFocus = denverDayKey(calendarBookings[0]?.start ?? new Date());
+  // Open on the current week, not on whichever booking happens to sort first —
+  // a booking scheduled months out would otherwise land staff in that week.
+  const todayKey = denverDayKey(new Date());
 
   return (
     <>
@@ -340,14 +441,271 @@ export default async function LeadsPage({
         ) : (
           <BookingCalendar
             bookings={calendarBookings}
-            initialFocus={initialFocus}
-            today={denverDayKey(new Date())}
+            initialFocus={todayKey}
+            today={todayKey}
           />
         )}
       </section>
 
-      <h2 className={styles.cardTitle}>Quote requests</h2>
+      <h2 className={styles.cardTitle}>Bookings</h2>
       <div className={styles.tableWrap} style={{ marginBottom: "var(--space-6)" }}>
+        {bookings.length === 0 ? (
+          <p className={styles.empty}>No bookings yet.</p>
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Customer</th>
+                <th>Delivery</th>
+                <th>Status</th>
+                <th>Dumpster</th>
+                <th>Placement</th>
+                <th>Price</th>
+                <th>Payment</th>
+                <th>Refund</th>
+                <th>Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bookings.map((booking) => (
+                (() => {
+                  const currentDumpster = assignedDumpsterLabel(booking);
+                  const payment = latestPayment(booking.payments);
+                  const options = availableDumpstersForBooking(
+                    booking,
+                    dumpsters,
+                    activeAssignments,
+                  );
+                  return (
+                    <tr key={booking.id}>
+                      <td data-label="Booking #">
+                        <span className={styles.tableCellStack}>
+                          <Link
+                            href={`/admin/leads/${booking.id}`}
+                            className={styles.tableLink}
+                          >
+                            {booking.booking_number}
+                          </Link>
+                          <span className={styles.cellMeta}>
+                            {dateOnly(booking.created_at)}
+                          </span>
+                        </span>
+                      </td>
+                      <td data-label="Customer">
+                        <Link
+                          href={`/admin/leads/${booking.id}`}
+                          className={styles.tableLinkStrong}
+                        >
+                          {customerName(booking.customers)}
+                        </Link>
+                      </td>
+                      <td data-label="Delivery">
+                        {booking.scheduled_start_at ? (
+                          <span className={styles.tableCellStack}>
+                            <Link
+                              href={`/admin/leads/${booking.id}`}
+                              className={styles.tableLink}
+                            >
+                              {dateOnly(booking.scheduled_start_at)}
+                            </Link>
+                            {booking.scheduled_end_at ? (
+                              <span className={styles.cellMeta}>
+                                to {dateOnly(booking.scheduled_end_at)}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td data-label="Status">
+                        <form
+                          action={updateBookingStatus}
+                          className={styles.inlineForm}
+                        >
+                          <input type="hidden" name="id" value={booking.id} />
+                          <AutoSubmitSelect
+                            name="status"
+                            defaultValue={booking.status}
+                            className={styles.inlineSelect}
+                            ariaLabel={`Status for booking ${booking.booking_number}`}
+                          >
+                            {BOOKING_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {humanizeStatus(status)}
+                              </option>
+                            ))}
+                          </AutoSubmitSelect>
+                        </form>
+                      </td>
+                      <td data-label="Dumpster">
+                        {supportsDumpsterAssignment(booking) ? (
+                          <form
+                            action={assignBookingDumpster}
+                            className={styles.inlineForm}
+                          >
+                            <input type="hidden" name="bookingId" value={booking.id} />
+                            <AutoSubmitSelect
+                              name="dumpsterId"
+                              defaultValue={activeDumpsterId(booking) ?? ""}
+                              className={styles.inlineSelect}
+                              ariaLabel={`Dumpster for booking ${booking.booking_number}`}
+                            >
+                              <option value="">Unassigned</option>
+                              {options.map((dumpster) => (
+                                <option key={dumpster.id} value={dumpster.id}>
+                                  {dumpster.asset_number}
+                                  {dumpster.dumpster_sizes?.name
+                                    ? ` • ${dumpster.dumpster_sizes.name}`
+                                    : ""}
+                                  {dumpster.status !== "available"
+                                    ? ` • ${humanizeStatus(dumpster.status)}`
+                                    : ""}
+                                </option>
+                              ))}
+                            </AutoSubmitSelect>
+                          </form>
+                        ) : currentDumpster ? (
+                          currentDumpster
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td data-label="Placement">
+                        {booking.customer_addresses?.latitude != null &&
+                        booking.customer_addresses?.longitude != null ? (
+                          <PlacementMapsLink
+                            latitude={booking.customer_addresses.latitude}
+                            longitude={booking.customer_addresses.longitude}
+                            bookingNumber={booking.booking_number}
+                            className={styles.snapshotLink}
+                          >
+                            <PlacementSnapshotMap
+                              latitude={booking.customer_addresses.latitude}
+                              longitude={booking.customer_addresses.longitude}
+                              label={`Placement snapshot for booking ${booking.booking_number}`}
+                              compact
+                            />
+                          </PlacementMapsLink>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td data-label="Price">{priceLabel(booking.booking_price_snapshots)}</td>
+                      <td data-label="Payment">
+                        {payment ? (
+                          <span className={styles.tableCellStack}>
+                            <span>{paidLabel(payment)}</span>
+                            <span className={styles.cellMeta}>
+                              {paymentMethodLabel(payment)}
+                            </span>
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td data-label="Refund">
+                        {(() => {
+                          const state = refundStateLabel(payment);
+                          if (state) return state;
+                          const remaining = refundableCents(payment);
+                          if (remaining <= 0) return "—";
+                          return (
+                            <details className={styles.refundDisclosure}>
+                              <summary className={styles.refundSummary}>
+                                Refund
+                              </summary>
+                              <form
+                                action={refundBookingPayment}
+                                className={styles.refundForm}
+                              >
+                                <input
+                                  type="hidden"
+                                  name="bookingId"
+                                  value={booking.id}
+                                />
+                                <label
+                                  className={styles.refundLabel}
+                                  htmlFor={`refund-amount-${booking.id}`}
+                                >
+                                  Amount
+                                </label>
+                                <input
+                                  id={`refund-amount-${booking.id}`}
+                                  name="amount"
+                                  className={styles.refundInput}
+                                  defaultValue={(remaining / 100).toFixed(2)}
+                                  inputMode="decimal"
+                                  autoComplete="off"
+                                />
+                                <label
+                                  className={styles.refundLabel}
+                                  htmlFor={`refund-confirm-${booking.id}`}
+                                >
+                                  Re-type to confirm
+                                </label>
+                                <input
+                                  id={`refund-confirm-${booking.id}`}
+                                  name="confirmAmount"
+                                  className={styles.refundInput}
+                                  placeholder={(remaining / 100).toFixed(2)}
+                                  inputMode="decimal"
+                                  autoComplete="off"
+                                />
+                                <PendingSubmitButton
+                                  className={styles.refundButton}
+                                  pendingLabel="Sending…"
+                                >
+                                  Send refund
+                                </PendingSubmitButton>
+                              </form>
+                            </details>
+                          );
+                        })()}
+                      </td>
+                      <td data-label="Delete">
+                        {(() => {
+                          const blocked = deleteBlockReason(booking);
+                          if (!blocked) {
+                            return (
+                              <form action={deleteBooking}>
+                                <input type="hidden" name="id" value={booking.id} />
+                                <button
+                                  type="submit"
+                                  className={styles.iconDangerButton}
+                                  aria-label={`Delete booking ${booking.booking_number}`}
+                                  title={`Delete booking ${booking.booking_number}`}
+                                >
+                                  <TrashIcon />
+                                </button>
+                              </form>
+                            );
+                          }
+                          return (
+                            <details className={styles.lockDisclosure}>
+                              <summary
+                                className={styles.lockedIcon}
+                                aria-label={`Why booking ${booking.booking_number} cannot be deleted`}
+                                title="Why can't this be deleted?"
+                              >
+                                <LockIcon />
+                              </summary>
+                              <p className={styles.lockReason}>{blocked}</p>
+                            </details>
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  );
+                })()
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <h2 className={styles.cardTitle}>Quote requests</h2>
+      <div className={styles.tableWrap}>
         {quotes.length === 0 ? (
           <p className={styles.empty}>No quote requests yet.</p>
         ) : (
@@ -362,21 +720,49 @@ export default async function LeadsPage({
                 <th>Needed</th>
                 <th>Area</th>
                 <th>Status</th>
+                <th>Delete</th>
               </tr>
             </thead>
             <tbody>
               {quotes.map((quote) => (
                 <tr key={quote.id}>
-                  <td data-label="Quote #">{quote.quote_number}</td>
+                  <td data-label="Quote #">
+                    <Link
+                      href={`/admin/leads/quote/${quote.id}`}
+                      className={styles.tableLink}
+                    >
+                      {quote.quote_number}
+                    </Link>
+                  </td>
                   <td data-label="Received">{dateOnly(quote.created_at)}</td>
-                  <td data-label="Customer">{customerName(quote.customers)}</td>
+                  <td data-label="Customer">
+                    <Link
+                      href={`/admin/leads/quote/${quote.id}`}
+                      className={styles.tableLinkStrong}
+                    >
+                      {customerName(quote.customers)}
+                    </Link>
+                  </td>
                   <td data-label="Contact" className={styles.cellWrap}>
                     {quote.customers?.email ?? "—"}
                     <br />
                     {quote.customers?.phone ?? ""}
                   </td>
-                  <td data-label="Size">{quote.request_details?.size_key ?? "—"}</td>
-                  <td data-label="Needed">{quote.request_details?.needed_date ?? "—"}</td>
+                  <td data-label="Size" className={styles.cellWrap}>
+                    {quote.service_items?.name ?? quote.request_details?.size_key ?? "—"}
+                    {quote.request_details?.rental_days ? (
+                      <>
+                        <br />
+                        {quote.request_details.rental_days} day
+                        {quote.request_details.rental_days === 1 ? "" : "s"}
+                      </>
+                    ) : null}
+                  </td>
+                  <td data-label="Needed">
+                    {quote.request_details?.needed_date
+                      ? dateOnly(quote.request_details.needed_date)
+                      : "—"}
+                  </td>
                   <td data-label="Area">
                     <span className={styles.statusPill}>
                       {quote.request_details?.service_area_check ?? "—"}
@@ -385,185 +771,34 @@ export default async function LeadsPage({
                   <td data-label="Status">
                     <form action={updateQuoteStatus} className={styles.inlineForm}>
                       <input type="hidden" name="id" value={quote.id} />
-                      <select
+                      <AutoSubmitSelect
                         name="status"
                         defaultValue={quote.status}
                         className={styles.inlineSelect}
-                        aria-label={`Status for quote ${quote.quote_number}`}
+                        ariaLabel={`Status for quote ${quote.quote_number}`}
                       >
                         {QUOTE_STATUSES.map((status) => (
                           <option key={status} value={status}>
                             {humanizeStatus(status)}
                           </option>
                         ))}
-                      </select>
-                      <button type="submit" className={styles.smallButton}>
-                        Save
+                      </AutoSubmitSelect>
+                    </form>
+                  </td>
+                  <td data-label="Delete">
+                    <form action={deleteQuote}>
+                      <input type="hidden" name="id" value={quote.id} />
+                      <button
+                        type="submit"
+                        className={styles.iconDangerButton}
+                        aria-label={`Delete quote ${quote.quote_number}`}
+                        title={`Delete quote ${quote.quote_number}`}
+                      >
+                        <TrashIcon />
                       </button>
                     </form>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <h2 className={styles.cardTitle}>Bookings</h2>
-      <div className={styles.tableWrap}>
-        {bookings.length === 0 ? (
-          <p className={styles.empty}>No bookings yet.</p>
-        ) : (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Created</th>
-                <th>Customer</th>
-                <th>Scheduled</th>
-                <th>Ends</th>
-                <th>Status</th>
-                <th>Dumpster</th>
-                <th>Placement</th>
-                <th>Price</th>
-                <th>Delete</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((booking) => (
-                (() => {
-                  const currentDumpster = assignedDumpsterLabel(booking);
-                  const options = availableDumpstersForBooking(
-                    booking,
-                    dumpsters,
-                    activeAssignments,
-                  );
-                  return (
-                    <tr key={booking.id}>
-                      <td data-label="Booking #">
-                        <Link
-                          href={`/admin/leads/${booking.id}`}
-                          className={styles.tableLink}
-                        >
-                          {booking.booking_number}
-                        </Link>
-                      </td>
-                      <td data-label="Created">{dateOnly(booking.created_at)}</td>
-                      <td data-label="Customer">{customerName(booking.customers)}</td>
-                      <td data-label="Scheduled">
-                        {booking.scheduled_start_at
-                          ? dateOnly(booking.scheduled_start_at)
-                          : "—"}
-                      </td>
-                      <td data-label="Ends">
-                        {booking.scheduled_end_at
-                          ? dateOnly(booking.scheduled_end_at)
-                          : "—"}
-                      </td>
-                      <td data-label="Status">
-                        <form
-                          action={updateBookingStatus}
-                          className={styles.inlineForm}
-                        >
-                          <input type="hidden" name="id" value={booking.id} />
-                          <select
-                            name="status"
-                            defaultValue={booking.status}
-                            className={styles.inlineSelect}
-                            aria-label={`Status for booking ${booking.booking_number}`}
-                          >
-                            {BOOKING_STATUSES.map((status) => (
-                              <option key={status} value={status}>
-                                {humanizeStatus(status)}
-                              </option>
-                            ))}
-                          </select>
-                          <button type="submit" className={styles.smallButton}>
-                            Save
-                          </button>
-                        </form>
-                      </td>
-                      <td data-label="Dumpster">
-                        {supportsDumpsterAssignment(booking) ? (
-                          <form
-                            action={assignBookingDumpster}
-                            className={styles.inlineForm}
-                          >
-                            <input type="hidden" name="bookingId" value={booking.id} />
-                            <select
-                              name="dumpsterId"
-                              defaultValue={activeDumpsterId(booking) ?? ""}
-                              className={styles.inlineSelect}
-                              aria-label={`Dumpster for booking ${booking.booking_number}`}
-                            >
-                              <option value="">Unassigned</option>
-                              {options.map((dumpster) => (
-                                <option key={dumpster.id} value={dumpster.id}>
-                                  {dumpster.asset_number}
-                                  {dumpster.dumpster_sizes?.name
-                                    ? ` • ${dumpster.dumpster_sizes.name}`
-                                    : ""}
-                                  {dumpster.status !== "available"
-                                    ? ` • ${humanizeStatus(dumpster.status)}`
-                                    : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <button type="submit" className={styles.smallButton}>
-                              Save
-                            </button>
-                          </form>
-                        ) : currentDumpster ? (
-                          currentDumpster
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td data-label="Placement">
-                        {booking.customer_addresses?.latitude != null &&
-                        booking.customer_addresses?.longitude != null ? (
-                          <Link
-                            href={`/admin/leads/${booking.id}`}
-                            className={styles.snapshotLink}
-                          >
-                            <PlacementSnapshotMap
-                              latitude={booking.customer_addresses.latitude}
-                              longitude={booking.customer_addresses.longitude}
-                              label={`Placement snapshot for booking ${booking.booking_number}`}
-                              compact
-                            />
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td data-label="Price">{priceLabel(booking.booking_price_snapshots)}</td>
-                      <td data-label="Delete">
-                        {canDeleteBooking(booking) ? (
-                          <form action={deleteBooking}>
-                            <input type="hidden" name="id" value={booking.id} />
-                            <button
-                              type="submit"
-                              className={styles.iconDangerButton}
-                              aria-label={`Delete booking ${booking.booking_number}`}
-                              title={`Delete booking ${booking.booking_number}`}
-                            >
-                              <TrashIcon />
-                            </button>
-                          </form>
-                        ) : (
-                          <span
-                            className={styles.lockedIcon}
-                            aria-label="Locked"
-                            title="Locked"
-                          >
-                            <LockIcon />
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })()
               ))}
             </tbody>
           </table>

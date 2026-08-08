@@ -3,12 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 
 import { formatCents } from "@/config/public-content";
-import { checkPostalCodeAction, submitBookingDraft } from "@/lib/booking/actions";
+import {
+  checkPostalCodeAction,
+  submitBookingDraft,
+  submitCustomQuoteRequest,
+} from "@/lib/booking/actions";
 import { createBookingCheckout } from "@/lib/booking/checkout";
 import { DUMPSTER_YARD_ADDRESS } from "@/lib/booking/delivery-zone";
 import {
   getBookingSizeOption,
   PREPAYMENT_AGREEMENT_TERMS,
+  resolveBookingPrice,
+  SMS_UPDATES_ENABLED,
   TRANSACTIONAL_CONSENT_LANGUAGE,
   type BookingSizeOption,
 } from "@/lib/booking/options";
@@ -31,6 +37,20 @@ type AddressModalState = {
   suggestion: SuggestedAddress | null;
   loading: boolean;
 };
+
+type CustomQuoteFormState = {
+  sizeKey: string;
+  rentalDays: string;
+  neededDate: string;
+  postalCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  customerNote: string;
+};
+
+type CustomQuoteErrors = Partial<Record<keyof CustomQuoteFormState, string>>;
 
 import styles from "./booking-flow.module.scss";
 import { DateCalendar } from "./date-calendar";
@@ -150,6 +170,23 @@ function validateStep(step: StepId, form: FormState): Errors {
   return errors;
 }
 
+function splitMaterialRules(materialRules: readonly string[]) {
+  const allowed: string[] = [];
+  const notAllowed: string[] = [];
+
+  for (const rule of materialRules) {
+    const trimmed = rule.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("No ")) {
+      notAllowed.push(trimmed.slice(3).trim());
+      continue;
+    }
+    allowed.push(trimmed);
+  }
+
+  return { allowed, notAllowed };
+}
+
 function formatEnteredAddress(form: FormState): string {
   return [
     form.addressLine1.trim(),
@@ -212,6 +249,21 @@ export function BookingFlow({
   const [addressModal, setAddressModal] = useState<AddressModalState | null>(
     null,
   );
+  const [customQuoteOpen, setCustomQuoteOpen] = useState(false);
+  const [customQuoteForm, setCustomQuoteForm] = useState<CustomQuoteFormState>({
+    sizeKey: "",
+    rentalDays: "",
+    neededDate: "",
+    postalCode: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    customerNote: "",
+  });
+  const [customQuoteErrors, setCustomQuoteErrors] = useState<CustomQuoteErrors>({});
+  const [customQuoteError, setCustomQuoteError] = useState<string | null>(null);
+  const [customQuoteSubmitting, setCustomQuoteSubmitting] = useState(false);
   const [areaCheck, setAreaCheck] = useState<PostalCodeCheck | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -258,14 +310,56 @@ export function BookingFlow({
       ? form.rentalDays
       : selectedOption?.rentalDayOptions[0] ?? null;
   const deliverySurchargeCents = areaCheck?.surchargeCents ?? 0;
+  const resolvedPrice =
+    selectedOption && selectedRentalDays
+      ? resolveBookingPrice(selectedOption, selectedRentalDays)
+      : selectedOption?.price ?? null;
   const fixedPriceTotalCents =
-    selectedOption?.price.type === "fixed"
-      ? selectedOption.price.amountCents + deliverySurchargeCents
+    resolvedPrice?.type === "fixed"
+      ? resolvedPrice.amountCents + deliverySurchargeCents
       : null;
   const reviewButtonLabel =
-    selectedOption?.price.type === "fixed"
-      ? `Reserve ${formatCents(fixedPriceTotalCents ?? selectedOption.price.amountCents)} test booking`
+    resolvedPrice?.type === "fixed"
+      ? `Continue to secure payment for ${formatCents(
+          fixedPriceTotalCents ?? resolvedPrice.amountCents,
+        )}`
       : "Submit quote request";
+
+  function seedCustomQuoteForm(): CustomQuoteFormState {
+    return {
+      sizeKey: form.sizeKey || sizeOptions[0]?.key || "",
+      rentalDays: selectedRentalDays ? String(selectedRentalDays) : "",
+      neededDate: form.neededDate || availability.minDate || todayIsoDate(),
+      postalCode: form.postalCode,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      phone: form.phone,
+      customerNote: "",
+    };
+  }
+
+  function openCustomQuote() {
+    setCustomQuoteForm(seedCustomQuoteForm());
+    setCustomQuoteErrors({});
+    setCustomQuoteError(null);
+    setCustomQuoteOpen(true);
+  }
+
+  function closeCustomQuote() {
+    if (customQuoteSubmitting) return;
+    setCustomQuoteOpen(false);
+  }
+
+  function updateCustomQuote<K extends keyof CustomQuoteFormState>(
+    key: K,
+    value: CustomQuoteFormState[K],
+  ) {
+    setCustomQuoteForm((prev) => ({ ...prev, [key]: value }));
+    if (customQuoteErrors[key]) {
+      setCustomQuoteErrors((prev) => ({ ...prev, [key]: undefined }));
+    }
+  }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -478,7 +572,7 @@ export function BookingFlow({
       : null;
 
     try {
-      // Fixed-price sizes create a real booking immediately in test mode.
+      // Fixed-price sizes continue into hosted Stripe Checkout.
       if (option?.price.type === "fixed") {
         const result = await createBookingCheckout(payload);
         if (!result.ok) {
@@ -487,11 +581,7 @@ export function BookingFlow({
           return;
         }
         window.sessionStorage.removeItem(STORAGE_KEY);
-        setConfirmation({
-          referenceNumber: result.bookingNumber,
-          serviceAreaConfirmed: result.serviceAreaConfirmed,
-          kind: "booking",
-        });
+        window.location.assign(result.checkoutUrl);
         return;
       }
 
@@ -511,6 +601,56 @@ export function BookingFlow({
       setFormError("Something went wrong. Please retry.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCustomQuoteSubmit() {
+    setCustomQuoteSubmitting(true);
+    setCustomQuoteError(null);
+    setCustomQuoteErrors({});
+
+    const payload = new FormData();
+    payload.set("postalCode", customQuoteForm.postalCode.trim());
+    payload.set("addressLine1", form.addressLine1.trim());
+    payload.set("addressLine2", form.addressLine2.trim());
+    payload.set("city", form.city.trim());
+    payload.set("region", form.region.trim());
+    payload.set("sizeKey", customQuoteForm.sizeKey);
+    payload.set("rentalDays", customQuoteForm.rentalDays.trim());
+    payload.set("neededDate", customQuoteForm.neededDate);
+    payload.set("firstName", customQuoteForm.firstName.trim());
+    payload.set("lastName", customQuoteForm.lastName.trim());
+    payload.set("email", customQuoteForm.email.trim());
+    payload.set("phone", customQuoteForm.phone.trim());
+    payload.set("customerNote", customQuoteForm.customerNote.trim());
+    if (form.placementLatitude !== null) {
+      payload.set("placementLatitude", String(form.placementLatitude));
+    }
+    if (form.placementLongitude !== null) {
+      payload.set("placementLongitude", String(form.placementLongitude));
+    }
+
+    try {
+      const result = await submitCustomQuoteRequest(payload);
+      if (!result.ok) {
+        setCustomQuoteError(result.error);
+        if (result.fieldErrors) {
+          setCustomQuoteErrors(result.fieldErrors as CustomQuoteErrors);
+        }
+        return;
+      }
+
+      window.sessionStorage.removeItem(STORAGE_KEY);
+      setCustomQuoteOpen(false);
+      setConfirmation({
+        referenceNumber: result.quoteNumber,
+        serviceAreaConfirmed: result.serviceAreaConfirmed,
+        kind: "quote",
+      });
+    } catch {
+      setCustomQuoteError("Something went wrong. Please retry.");
+    } finally {
+      setCustomQuoteSubmitting(false);
     }
   }
 
@@ -534,22 +674,24 @@ export function BookingFlow({
                       ? " and routed it into the admin queue for staff review."
                       : " and flagged the address for service-area review before staff finalize it."
                   }`
-                : `We saved your dumpster request. A Barnes team member will confirm${
+                : `We received your dumpster quote request. Barnes will review it within 24 hours and contact you${
                     confirmation.serviceAreaConfirmed
-                      ? " your delivery date and finalize pricing."
-                      : " that your address is within our service area, then confirm your date and pricing."
+                      ? " to confirm your delivery date and pricing."
+                      : " after confirming your address is within our service area."
                   }`}
             </p>
             <p className={styles.helpText}>
-              Please check your email for a confirmation and receipt with your
-              request details. If it&apos;s not in your inbox, check your spam
-              folder.
-            </p>
-            <p className={styles.helpText}>
               {confirmation.kind === "booking"
-                ? "Test mode is on. No card was charged, but the booking was created so you can test scheduling, assignment, and admin workflows."
-                : "Online payment and the emailed rental agreement are being finalized and are not active in this preview. No card was charged."}
+                ? "Please check your email for a confirmation and receipt with your request details. If it&apos;s not in your inbox, check your spam folder."
+                : "A Barnes team member will follow up using the contact information you provided."}
             </p>
+            {confirmation.kind === "booking" ? (
+              <p className={styles.helpText}>
+                Test mode is on. No card was charged, but the booking was
+                created so you can test scheduling, assignment, and admin
+                workflows.
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -598,6 +740,7 @@ export function BookingFlow({
               onChange={update}
               areaCheck={areaCheck}
               sizeOptions={sizeOptions}
+              onOpenCustomQuote={openCustomQuote}
             />
           )}
           {step.id === "schedule" && (
@@ -642,14 +785,28 @@ export function BookingFlow({
               </button>
             )}
             {step.id === "review" ? (
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting ? "Working…" : reviewButtonLabel}
-              </button>
+              <div className={styles.submitGroup}>
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={handleSubmit}
+                  disabled={submitting || !form.agreementAccepted}
+                  aria-describedby={
+                    !form.agreementAccepted && !submitting
+                      ? "agreementGate"
+                      : undefined
+                  }
+                >
+                  {submitting ? "Working…" : reviewButtonLabel}
+                </button>
+                {/* A disabled button with no explanation reads as a broken
+                    page, so always say what is blocking it. */}
+                {!form.agreementAccepted && !submitting && (
+                  <p id="agreementGate" className={styles.submitHint}>
+                    Accept the load and weight terms above to continue.
+                  </p>
+                )}
+              </div>
             ) : (
               <button
                 type="button"
@@ -722,6 +879,218 @@ export function BookingFlow({
               onClick={() => setAddressModal(null)}
             >
               Edit address
+            </button>
+          </div>
+        </div>
+      )}
+
+      {customQuoteOpen && (
+        <div
+          className={styles.modalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="custom-quote-title"
+        >
+          <div className={`${styles.modalCard} ${styles.customQuoteModalCard}`}>
+            <h2 id="custom-quote-title" className={styles.modalTitle}>
+              Get a custom dumpster quote
+            </h2>
+            <p className={styles.helpText}>
+              Use this for a custom rental length or a longer project. No payment is
+              collected here.
+            </p>
+            <div className={styles.addressOption}>
+              <p className={styles.addressOptionLabel}>Using delivery address</p>
+              <p className={styles.addressOptionValue}>
+                {formatEnteredAddress(form)}
+              </p>
+            </div>
+
+            {customQuoteError ? (
+              <p className={styles.formError} role="alert">
+                {customQuoteError}
+              </p>
+            ) : null}
+
+            <div className={styles.customQuoteFormGrid}>
+              <Field
+                id="custom-size"
+                label="Dumpster"
+                error={customQuoteErrors.sizeKey}
+              >
+                <select
+                  id="custom-size"
+                  className={`${styles.select} ${customQuoteErrors.sizeKey ? styles.inputError : ""}`}
+                  value={customQuoteForm.sizeKey}
+                  onChange={(event) => updateCustomQuote("sizeKey", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.sizeKey)}
+                >
+                  <option value="" disabled>
+                    Choose a dumpster
+                  </option>
+                  {sizeOptions.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.size} — {option.use}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field
+                id="custom-rental-days"
+                label="How many days?"
+                error={customQuoteErrors.rentalDays}
+              >
+                <input
+                  id="custom-rental-days"
+                  type="number"
+                  min="1"
+                  className={`${styles.input} ${customQuoteErrors.rentalDays ? styles.inputError : ""}`}
+                  value={customQuoteForm.rentalDays}
+                  onChange={(event) => updateCustomQuote("rentalDays", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.rentalDays)}
+                />
+              </Field>
+
+              <Field
+                id="custom-needed-date"
+                label="What day do you want it?"
+                error={customQuoteErrors.neededDate}
+              >
+                <input
+                  id="custom-needed-date"
+                  type="date"
+                  min={availability.minDate}
+                  className={`${styles.input} ${customQuoteErrors.neededDate ? styles.inputError : ""}`}
+                  value={customQuoteForm.neededDate}
+                  onChange={(event) => updateCustomQuote("neededDate", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.neededDate)}
+                />
+              </Field>
+
+              <Field
+                id="custom-postal-code"
+                label="ZIP code"
+                error={customQuoteErrors.postalCode}
+              >
+                <input
+                  id="custom-postal-code"
+                  inputMode="numeric"
+                  maxLength={5}
+                  className={`${styles.input} ${customQuoteErrors.postalCode ? styles.inputError : ""}`}
+                  value={customQuoteForm.postalCode}
+                  onChange={(event) =>
+                    updateCustomQuote(
+                      "postalCode",
+                      event.target.value.replace(/\D/g, "").slice(0, 5),
+                    )
+                  }
+                  aria-invalid={Boolean(customQuoteErrors.postalCode)}
+                />
+              </Field>
+
+              <Field
+                id="custom-first-name"
+                label="First name"
+                error={customQuoteErrors.firstName}
+              >
+                <input
+                  id="custom-first-name"
+                  className={`${styles.input} ${customQuoteErrors.firstName ? styles.inputError : ""}`}
+                  value={customQuoteForm.firstName}
+                  onChange={(event) => updateCustomQuote("firstName", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.firstName)}
+                />
+              </Field>
+
+              <Field
+                id="custom-last-name"
+                label="Last name"
+                error={customQuoteErrors.lastName}
+              >
+                <input
+                  id="custom-last-name"
+                  className={`${styles.input} ${customQuoteErrors.lastName ? styles.inputError : ""}`}
+                  value={customQuoteForm.lastName}
+                  onChange={(event) => updateCustomQuote("lastName", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.lastName)}
+                />
+              </Field>
+
+              <Field
+                id="custom-email"
+                label="Email"
+                error={customQuoteErrors.email}
+              >
+                <input
+                  id="custom-email"
+                  type="email"
+                  className={`${styles.input} ${customQuoteErrors.email ? styles.inputError : ""}`}
+                  value={customQuoteForm.email}
+                  onChange={(event) => updateCustomQuote("email", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.email)}
+                />
+              </Field>
+
+              <Field
+                id="custom-phone"
+                label="Phone"
+                error={customQuoteErrors.phone}
+              >
+                <input
+                  id="custom-phone"
+                  type="tel"
+                  className={`${styles.input} ${customQuoteErrors.phone ? styles.inputError : ""}`}
+                  value={customQuoteForm.phone}
+                  onChange={(event) => updateCustomQuote("phone", event.target.value)}
+                  aria-invalid={Boolean(customQuoteErrors.phone)}
+                />
+              </Field>
+
+              <div className={styles.customQuoteFullWidth}>
+                <Field
+                  id="custom-note"
+                  label="Anything else we should know?"
+                  optional
+                >
+                  <textarea
+                    id="custom-note"
+                    className={styles.textarea}
+                    rows={4}
+                    value={customQuoteForm.customerNote}
+                    onChange={(event) =>
+                      updateCustomQuote("customerNote", event.target.value)
+                    }
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={closeCustomQuote}
+                disabled={customQuoteSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={handleCustomQuoteSubmit}
+                disabled={customQuoteSubmitting}
+              >
+                {customQuoteSubmitting ? "Sending…" : "Send custom quote request"}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className={styles.modalDismiss}
+              onClick={closeCustomQuote}
+            >
+              Back to booking options
             </button>
           </div>
         </div>
@@ -985,9 +1354,11 @@ function StepSize({
   onChange,
   areaCheck,
   sizeOptions,
+  onOpenCustomQuote,
 }: StepProps & {
   areaCheck: PostalCodeCheck | null;
   sizeOptions: readonly BookingSizeOption[];
+  onOpenCustomQuote: () => void;
 }) {
   const surchargeCents = areaCheck?.surchargeCents ?? 0;
   const selectedOption = form.sizeKey
@@ -1000,7 +1371,7 @@ function StepSize({
         <p className={styles.stepEyebrow}>Step 2 of 6</p>
         <h1 className={styles.stepTitle}>Choose your container</h1>
         <p className={styles.stepSummary}>
-          Choose your container and rental duration. Each rental includes up to 3 tons of disposal.
+          Choose your container and rental duration. Included weight depends on the container and approved material type.
         </p>
       </header>
       {errors.sizeKey && (
@@ -1011,6 +1382,12 @@ function StepSize({
       <div className={styles.sizeGrid}>
         {sizeOptions.map((option) => {
           const selected = form.sizeKey === option.key;
+          const { allowed, notAllowed } = splitMaterialRules(option.materialRules);
+          const optionRentalDays =
+            option.rentalDayOptions.includes(form.rentalDays ?? -1)
+              ? (form.rentalDays as number)
+              : (option.rentalDayOptions[0] ?? option.rentalDays);
+          const optionPrice = resolveBookingPrice(option, optionRentalDays);
           return (
             <button
               type="button"
@@ -1027,26 +1404,28 @@ function StepSize({
               }}
               aria-pressed={selected}
             >
-              <div className={styles.sizeMediaWrap}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={option.image}
-                  alt={`${option.size} dumpster`}
-                  className={styles.sizeMedia}
-                />
-              </div>
+              {option.image ? (
+                <div className={styles.sizeMediaWrap}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={option.image}
+                    alt={`${option.size} dumpster`}
+                    className={styles.sizeMedia}
+                  />
+                </div>
+              ) : null}
               <div className={styles.sizeDetails}>
                 <div className={styles.sizeCardHead}>
-                  <div>
+                  <div className={styles.sizeTitleBlock}>
                     <p className={styles.sizeName}>
                       {option.size} — {option.use}
                     </p>
                     <p className={styles.sizeUse}>{option.dimensions}</p>
                   </div>
-                  {option.price.type === "fixed" ? (
+                  {optionPrice.type === "fixed" ? (
                     <div className={styles.sizePriceBlock}>
                       <span className={styles.sizePrice}>
-                        {formatCents(option.price.amountCents + surchargeCents)}
+                        {formatCents(optionPrice.amountCents + surchargeCents)}
                       </span>
                       {surchargeCents > 0 ? (
                         <span className={styles.sizePriceDetail}>
@@ -1060,15 +1439,51 @@ function StepSize({
                     </div>
                   ) : (
                     <span className={styles.sizePriceQuote}>
-                      {option.price.label}
+                      {optionPrice.label}
                     </span>
                   )}
                 </div>
-                <ul className={styles.sizeRules}>
-                  {option.materialRules.map((rule) => (
-                    <li key={rule}>{rule}</li>
-                  ))}
-                </ul>
+                <div className={styles.sizeMeta}>
+                  <span className={`${styles.sizeMetaPill} ${styles.sizeMetaPillWeight}`}>
+                    {option.includedWeightLabel}
+                  </span>
+                  <span className={styles.sizeMetaPill}>
+                    {option.rentalDayOptions.map((days) => `${days}-day`).join(", ")}
+                  </span>
+                </div>
+                <div className={styles.sizeRuleGroups}>
+                  {allowed.length > 0 ? (
+                    <div className={styles.sizeRuleGroup}>
+                      <span className={styles.sizeRuleLabel}>Allowed</span>
+                      <div className={styles.sizeRuleChips}>
+                        {allowed.map((rule) => (
+                          <span key={rule} className={styles.sizeRuleChip}>
+                            {rule}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {notAllowed.length > 0 ? (
+                    <div className={styles.sizeRuleGroup}>
+                      <span
+                        className={`${styles.sizeRuleLabel} ${styles.sizeRuleLabelDanger}`}
+                      >
+                        Not allowed
+                      </span>
+                      <div className={styles.sizeRuleChips}>
+                        {notAllowed.map((rule) => (
+                          <span
+                            key={rule}
+                            className={`${styles.sizeRuleChip} ${styles.sizeRuleChipDanger}`}
+                          >
+                            {rule}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </button>
           );
@@ -1098,11 +1513,28 @@ function StepSize({
       ) : null}
       <p className={styles.helpText}>
         {areaCheck?.status === "extended"
-          ? `Prices below include the extra distance charge for this address: ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, with ${formatCents(areaCheck.surchargeCents ?? 0)} added beyond the 20-mile included area.`
+          ? `Prices below include the extra distance charge for this address: ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, with ${formatCents(areaCheck.surchargeCents ?? 0)} added for the excess miles beyond the 20-mile included area.`
           : areaCheck?.status === "validated"
             ? "Prices below include delivery inside the standard 20-mile service area. Taxes are confirmed before payment."
             : "Prices shown are the base rental rate for the selected duration. Taxes and any delivery charge are confirmed once your address is verified."}
       </p>
+      <div className={styles.customQuoteCallout}>
+        <div className={styles.customQuoteCalloutBody}>
+          <p className={styles.customQuoteEyebrow}>Need a longer rental?</p>
+          <h2 className={styles.customQuoteTitle}>Get a custom quote</h2>
+          <p className={styles.customQuoteText}>
+            Request a custom number of rental days or a longer project timeline and
+            Barnes will review pricing and availability.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={onOpenCustomQuote}
+        >
+          Get custom quote
+        </button>
+      </div>
     </>
   );
 }
@@ -1213,21 +1645,23 @@ function StepContact({ form, errors, onChange }: StepProps) {
             </span>
           </label>
         </div>
-        <div className={styles.checkRow}>
-          <input
-            id="smsUpdates"
-            type="checkbox"
-            checked={form.smsUpdates}
-            onChange={(event) => onChange("smsUpdates", event.target.checked)}
-          />
-          <label className={styles.checkLabel} htmlFor="smsUpdates">
-            <span className={styles.checkLabelTitle}>Text (SMS) updates</span>
-            <span className={styles.checkLabelText}>
-              Get delivery and pickup reminders by text. Reply STOP to opt out at
-              any time.
-            </span>
-          </label>
-        </div>
+        {SMS_UPDATES_ENABLED ? (
+          <div className={styles.checkRow}>
+            <input
+              id="smsUpdates"
+              type="checkbox"
+              checked={form.smsUpdates}
+              onChange={(event) => onChange("smsUpdates", event.target.checked)}
+            />
+            <label className={styles.checkLabel} htmlFor="smsUpdates">
+              <span className={styles.checkLabelTitle}>Text (SMS) updates</span>
+              <span className={styles.checkLabelText}>
+                Get delivery and pickup reminders by text. Reply STOP to opt out
+                at any time.
+              </span>
+            </label>
+          </div>
+        ) : null}
       </fieldset>
     </>
   );
@@ -1299,9 +1733,11 @@ function StepReview({
       ? form.rentalDays
       : option?.rentalDayOptions[0] ?? null;
   const surchargeCents = areaCheck?.surchargeCents ?? 0;
+  const resolvedPrice =
+    option && rentalDays ? resolveBookingPrice(option, rentalDays) : option?.price ?? null;
   const totalCents =
-    option?.price.type === "fixed"
-      ? option.price.amountCents + surchargeCents
+    resolvedPrice?.type === "fixed"
+      ? resolvedPrice.amountCents + surchargeCents
       : null;
 
   return (
@@ -1368,17 +1804,17 @@ function StepReview({
       <div className={styles.priceCard}>
         <div className={styles.priceRow}>
           <span className={styles.summaryTerm}>
-            Base rental ({rentalDays ?? option?.rentalDays ?? 0} day{(rentalDays ?? option?.rentalDays ?? 0) === 1 ? "" : "s"}, 3 tons)
+            Base rental ({rentalDays ?? option?.rentalDays ?? 0} day{(rentalDays ?? option?.rentalDays ?? 0) === 1 ? "" : "s"}{option ? `, ${option.includedWeightLabel.toLowerCase()}` : ""})
           </span>
-          {option && option.price.type === "fixed" ? (
+          {resolvedPrice?.type === "fixed" ? (
             <span className={styles.priceAmount}>
-              {formatCents(option.price.amountCents)}
+              {formatCents(resolvedPrice.amountCents)}
             </span>
           ) : (
             <span className={styles.sizePriceQuote}>Priced after review</span>
           )}
         </div>
-        {option?.price.type === "fixed" && areaCheck && areaCheck.surchargeCents ? (
+        {resolvedPrice?.type === "fixed" && areaCheck && areaCheck.surchargeCents ? (
           <>
             <div className={styles.priceRow}>
               <span className={styles.summaryTerm}>
@@ -1391,7 +1827,7 @@ function StepReview({
             <div className={styles.priceRow}>
               <span className={styles.summaryTerm}>Estimated total before tax</span>
               <span className={styles.priceAmount}>
-                {formatCents(totalCents ?? option.price.amountCents)}
+                {formatCents(totalCents ?? resolvedPrice.amountCents)}
               </span>
             </div>
           </>
@@ -1400,8 +1836,8 @@ function StepReview({
           {areaCheck?.status === "validated"
             ? `Delivery is included inside the standard ${areaCheck.includedMiles}-mile area from ${DUMPSTER_YARD_ADDRESS}.`
             : areaCheck?.status === "extended"
-              ? `This address is ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, so ${formatCents(areaCheck.surchargeCents ?? 0)} has been added for the distance beyond ${areaCheck.includedMiles} miles.`
-              : "Taxes and any delivery charge are confirmed before payment. Overweight loads are billed at $50 per ton after the included 3 tons."}
+              ? `This address is ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, so ${formatCents(areaCheck.surchargeCents ?? 0)} has been added for the excess miles beyond ${areaCheck.includedMiles} miles.`
+              : "Taxes and any delivery charge are confirmed before payment. Residential overage is billed at $50 per ton above the included weight allowance."}
         </p>
       </div>
 
@@ -1437,13 +1873,13 @@ function StepReview({
       </div>
 
       <div className={styles.payStub}>
-        {option && option.price.type === "fixed" ? (
+        {resolvedPrice?.type === "fixed" ? (
           <>
-            <strong>Next: create a test booking.</strong>
+            <strong>Next: pay in Stripe Checkout.</strong>
             <span>
-              Test mode is active. Submitting this form creates the booking
-              immediately without charging a card so you can test scheduling,
-              assignment, and admin workflows.
+              You&apos;ll review the total, pay securely, and authorize Barnes
+              to save your payment method for later documented overage charges
+              described in the rental terms.
             </span>
           </>
         ) : (

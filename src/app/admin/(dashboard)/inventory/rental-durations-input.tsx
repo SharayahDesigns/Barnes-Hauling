@@ -43,7 +43,7 @@ export function RentalDurationsInput({
     <fieldset className={styles.choiceGroup}>
       <legend className={styles.label}>{legend}</legend>
       <input type="hidden" name={name} value="" />
-      <div className={styles.inlineForm}>
+      <div className={styles.inlineInputAction}>
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -53,13 +53,13 @@ export function RentalDurationsInput({
               addDuration(draft);
             }
           }}
-          className={styles.input}
+          className={`${styles.input} ${styles.inlineInputActionField}`}
           inputMode="numeric"
           placeholder="Add days"
         />
         <button
           type="button"
-          className={styles.smallButton}
+          className={styles.inlineInputActionButton}
           onClick={() => addDuration(draft)}
         >
           Add

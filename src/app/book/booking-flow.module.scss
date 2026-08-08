@@ -377,32 +377,81 @@
 /* Container size cards */
 .sizeGrid {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .sizeCard {
-  display: flex;
-  align-items: center;
+  position: relative;
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  align-items: start;
   gap: var(--space-4);
   text-align: left;
   padding: var(--space-4);
-  border: 0.125rem solid var(--color-border);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  padding-right: calc(var(--space-4) + 1.5rem);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-large);
+  background: var(--color-surface-raised);
   cursor: pointer;
+  box-shadow: 0 0.0625rem 0.125rem rgb(11 12 10 / 0.04);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
 }
 
-.sizeCardSelected {
+.sizeCard::after {
+  content: "";
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 0.0938rem solid var(--color-border);
+  background: transparent;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sizeCard:hover {
+  border-color: var(--color-brand-soft);
+  box-shadow: 0 0.25rem 0.75rem rgb(11 12 10 / 0.06);
+}
+
+.sizeCard:hover::after {
+  border-color: var(--color-brand-soft);
+}
+
+.sizeCard:focus-visible {
+  outline: 0;
   border-color: var(--color-brand);
-  background: rgb(78 106 42 / 6%);
+  box-shadow: 0 0 0 0.1875rem rgb(78 106 42 / 20%);
+}
+
+.sizeCardSelected,
+.sizeCardSelected:hover {
+  border-color: var(--color-brand);
+  background: rgb(78 106 42 / 0.04);
+  box-shadow: inset 0 0 0 0.0625rem var(--color-brand);
+}
+
+.sizeCardSelected::after,
+.sizeCardSelected:hover::after {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  box-shadow: inset 0 0 0 0.1875rem var(--color-surface-raised);
 }
 
 .sizeMediaWrap {
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: calc(var(--radius-card) - 0.2rem);
-  width: 4.5rem;
-  height: 4.5rem;
+  border-radius: var(--radius-card);
+  width: 6rem;
+  height: 6rem;
+  background: var(--color-surface-muted);
 }
 
 .sizeMedia {
@@ -416,47 +465,55 @@
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: var(--space-3);
+  gap: 0.85rem;
 }
 
 .sizeCardHead {
   display: flex;
   justify-content: space-between;
   gap: var(--space-3);
-  align-items: baseline;
+  align-items: start;
+}
+
+.sizeTitleBlock {
+  min-width: 0;
 }
 
 .sizeName {
   margin: 0;
   font-family: var(--font-heading), sans-serif;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
+  line-height: 1.2;
   color: var(--color-ink);
 }
 
 .sizeUse {
-  margin: 0;
+  margin: 0.25rem 0 0;
   color: var(--color-text-muted);
-  font-size: var(--text-small);
+  font-size: 0.82rem;
 }
 
 .sizePrice {
   font-family: var(--font-display), sans-serif;
-  font-size: 1.5rem;
-  color: var(--color-brand-deep);
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--color-ink);
   white-space: nowrap;
 }
 
 .sizePriceBlock {
   display: grid;
   justify-items: end;
-  gap: 0.2rem;
+  gap: 0.15rem;
+  flex-shrink: 0;
 }
 
 .sizePriceDetail {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--color-text-muted);
   text-align: right;
-  max-width: 10rem;
+  max-width: 9rem;
+  line-height: 1.3;
 }
 
 .sizePriceQuote {
@@ -466,13 +523,155 @@
   white-space: normal;
 }
 
-.sizeRules {
+.sizeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.sizeMetaPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 0.0625rem solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.sizeMetaPillWeight {
+  border-color: rgb(78 106 42 / 0.28);
+  background: rgb(78 106 42 / 0.08);
+  color: var(--color-brand-deep);
+}
+
+.sizeRuleGroups {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.85rem;
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.sizeRuleGroup {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.sizeRuleLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.sizeRuleLabelDanger {
+  color: var(--color-danger);
+}
+
+.sizeRuleChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.sizeRuleChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.sizeRuleChipDanger {
+  background: rgb(163 58 50 / 0.09);
+  color: var(--color-danger);
+}
+
+.customQuoteCallout {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: linear-gradient(180deg, rgb(247 247 244 / 100%), rgb(236 237 233 / 76%));
+}
+
+.customQuoteCalloutBody {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.customQuoteEyebrow {
   margin: 0;
-  padding-left: 1.1rem;
+  color: var(--color-brand);
+  font-family: var(--font-heading), sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.customQuoteTitle {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--color-ink);
+}
+
+.customQuoteText {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-small);
-  display: grid;
-  gap: var(--space-1);
+  line-height: 1.45;
+}
+
+@media (max-width: 34rem) {
+  .sizeCard {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    padding-right: calc(var(--space-3) + 1.5rem);
+  }
+
+  .sizeCard::after {
+    top: var(--space-3);
+    right: var(--space-3);
+  }
+
+  .sizeMediaWrap {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
+  .sizeCardHead {
+    flex-direction: column;
+    align-items: start;
+    gap: 0.5rem;
+  }
+
+  .sizePriceBlock {
+    justify-items: start;
+  }
+
+  .sizePriceDetail {
+    text-align: left;
+    max-width: none;
+  }
+}
+
+@media (min-width: 52rem) {
+  .customQuoteCallout {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
 }
 
 /* Checkboxes */
@@ -638,6 +837,9 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-6);
+  /* Without this, flex stretches Back to match the full height of the pay
+     button's group, hint text included, leaving the two buttons uneven. */
+  align-items: flex-start;
 }
 
 .primaryButton,
@@ -664,6 +866,20 @@
 .primaryButton:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Keeps the pay button and its blocking reason together, so the hint sits
+   under the button rather than becoming another flex sibling in .actions. */
+.submitGroup {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+
+.submitHint {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
 }
 
 .secondaryButton {
@@ -735,6 +951,25 @@
   border-radius: var(--radius-large);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-raised);
+}
+
+.customQuoteModalCard {
+  width: min(40rem, 100%);
+}
+
+.customQuoteFormGrid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.customQuoteFullWidth {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 34rem) {
+  .customQuoteFormGrid {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .modalTitle {

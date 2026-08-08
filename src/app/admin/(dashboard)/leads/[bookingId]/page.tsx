@@ -5,6 +5,7 @@ import { createPageMetadata } from "@/lib/page-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import styles from "../../../admin.module.scss";
+import { denverDayKey, utcDateFromDayKey } from "../calendar-utils";
 import { PlacementSnapshotMap } from "../placement-snapshot-map";
 
 export const metadata = createPageMetadata(
@@ -55,6 +56,18 @@ type BookingDetailRow = {
         range_max_cents: number | null;
         snapshot_type: string;
         revision_number: number;
+      }>
+    | null;
+  payments:
+    | Array<{
+        status: string;
+        amount_cents: number;
+        currency_code: string;
+        card_on_file: boolean;
+        is_test_mode: boolean;
+        succeeded_at: string | null;
+        stripe_payment_intent_id: string | null;
+        metadata: Record<string, unknown> | null;
       }>
     | null;
   dumpster_assignments:
@@ -123,6 +136,66 @@ function latestPriceLabel(
   return "—";
 }
 
+// Settled amounts show exact cents; formatMoney above uses locale defaults for
+// catalog prices, which can hide a cents-level difference on a real charge.
+const EXACT_USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function exactMoney(cents: number): string {
+  return EXACT_USD.format(cents / 100);
+}
+
+function settledPayment(payments: BookingDetailRow["payments"]) {
+  if (!payments || payments.length === 0) return null;
+  // Prefer a settled payment over an abandoned checkout attempt.
+  return payments.find((payment) => payment.status === "succeeded") ?? payments[0];
+}
+
+function cardLabel(
+  payment: NonNullable<ReturnType<typeof settledPayment>>,
+): string {
+  const brand = payment.metadata?.card_brand;
+  const last4 = payment.metadata?.card_last4;
+  if (typeof brand === "string" && typeof last4 === "string") {
+    return `${brand.charAt(0).toUpperCase()}${brand.slice(1)} ····${last4}`;
+  }
+  return payment.card_on_file ? "Card on file" : "—";
+}
+
+function metadataCents(
+  payment: NonNullable<ReturnType<typeof settledPayment>>,
+  key: string,
+): number | null {
+  const value = payment.metadata?.[key];
+  return typeof value === "number" ? value : null;
+}
+
+/**
+ * How many rental days the customer selected.
+ *
+ * Prefers the value recorded at checkout, which is literally what they chose.
+ * Falls back to the scheduled window for bookings created in the admin, where
+ * scheduled_end_at is start + rentalDays by construction — compared as Denver
+ * calendar days so the fixed 9am/6pm boundary times cannot round the count off.
+ */
+function rentalDays(booking: BookingDetailRow): number | null {
+  const payment = settledPayment(booking.payments);
+  const recorded = payment?.metadata?.rental_days;
+  if (typeof recorded === "number" && recorded > 0) return recorded;
+
+  if (!booking.scheduled_start_at || !booking.scheduled_end_at) return null;
+  const start = utcDateFromDayKey(denverDayKey(booking.scheduled_start_at));
+  const end = utcDateFromDayKey(denverDayKey(booking.scheduled_end_at));
+  const days = Math.round(
+    (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  return days > 0 ? days : null;
+}
+
 function addressLabel(address: BookingDetailRow["customer_addresses"]): string {
   if (!address) return "—";
   return [
@@ -140,7 +213,7 @@ export default async function BookingDetailPage({
   const { bookingId } = await params;
   const supabase = createAdminClient();
   const bookingSelect =
-    "id, booking_number, status, created_at, scheduled_start_at, scheduled_end_at, customer_instructions, agreement_version, agreement_accepted_at, customers(first_name, last_name, email, phone), customer_addresses!bookings_service_address_id_fkey(address_line_1, address_line_2, city, region, postal_code, latitude, longitude, delivery_distance_miles, delivery_surcharge_cents), service_items(name), booking_price_snapshots(total_cents, range_min_cents, range_max_cents, snapshot_type, revision_number), dumpster_assignments(status, starts_at, ends_at, dumpsters(asset_number, dumpster_sizes(name))), files(id, bucket_id, object_path, original_filename, created_at, category, description)";
+    "id, booking_number, status, created_at, scheduled_start_at, scheduled_end_at, customer_instructions, agreement_version, agreement_accepted_at, customers(first_name, last_name, email, phone), customer_addresses!bookings_service_address_id_fkey(address_line_1, address_line_2, city, region, postal_code, latitude, longitude, delivery_distance_miles, delivery_surcharge_cents), service_items(name), booking_price_snapshots(total_cents, range_min_cents, range_max_cents, snapshot_type, revision_number), payments(status, amount_cents, currency_code, card_on_file, is_test_mode, succeeded_at, stripe_payment_intent_id, metadata), dumpster_assignments(status, starts_at, ends_at, dumpsters(asset_number, dumpster_sizes(name))), files(id, bucket_id, object_path, original_filename, created_at, category, description)";
 
   const bookingResult = await supabase
     .from("bookings")
@@ -159,6 +232,14 @@ export default async function BookingDetailPage({
       (assignment) =>
         assignment.status === "reserved" || assignment.status === "assigned",
     ) ?? null;
+
+  const payment = settledPayment(booking.payments);
+  const bookingRentalDays = rentalDays(booking);
+  // Stripe's settled breakdown, captured by the webhook.
+  const subtotalCents = payment
+    ? metadataCents(payment, "checkout_subtotal_cents")
+    : null;
+  const taxCents = payment ? metadataCents(payment, "checkout_total_tax_cents") : null;
 
   return (
     <>
@@ -195,6 +276,14 @@ export default async function BookingDetailPage({
               </dd>
             </div>
             <div className={styles.detailRow}>
+              <dt>Rental duration</dt>
+              <dd>
+                {bookingRentalDays !== null
+                  ? `${bookingRentalDays} day${bookingRentalDays === 1 ? "" : "s"}`
+                  : "—"}
+              </dd>
+            </div>
+            <div className={styles.detailRow}>
               <dt>Dumpster requested</dt>
               <dd>{booking.service_items?.name ?? "—"}</dd>
             </div>
@@ -215,6 +304,61 @@ export default async function BookingDetailPage({
               <dd>{latestPriceLabel(booking.booking_price_snapshots)}</dd>
             </div>
           </dl>
+        </section>
+
+        <section className={styles.card}>
+          <h2 className={styles.cardTitle}>Payment</h2>
+          {payment ? (
+            <dl className={styles.detailList}>
+              <div className={styles.detailRow}>
+                <dt>Status</dt>
+                <dd>
+                  {payment.status === "succeeded"
+                    ? "Paid"
+                    : payment.status.replace(/_/g, " ")}
+                  {payment.is_test_mode ? " (Stripe sandbox)" : ""}
+                </dd>
+              </div>
+              <div className={styles.detailRow}>
+                <dt>Amount paid</dt>
+                <dd>{exactMoney(payment.amount_cents)}</dd>
+              </div>
+              {subtotalCents !== null && (
+                <div className={styles.detailRow}>
+                  <dt>Subtotal</dt>
+                  <dd>{exactMoney(subtotalCents)}</dd>
+                </div>
+              )}
+              {taxCents !== null && (
+                <div className={styles.detailRow}>
+                  <dt>Tax</dt>
+                  <dd>{exactMoney(taxCents)}</dd>
+                </div>
+              )}
+              <div className={styles.detailRow}>
+                <dt>Payment method</dt>
+                <dd>{cardLabel(payment)}</dd>
+              </div>
+              <div className={styles.detailRow}>
+                <dt>Card on file</dt>
+                <dd>
+                  {payment.card_on_file
+                    ? "Yes — authorized for documented overages"
+                    : "No"}
+                </dd>
+              </div>
+              <div className={styles.detailRow}>
+                <dt>Paid at</dt>
+                <dd>{formatDateTime(payment.succeeded_at)}</dd>
+              </div>
+              <div className={styles.detailRow}>
+                <dt>Stripe payment</dt>
+                <dd>{payment.stripe_payment_intent_id ?? "—"}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className={styles.empty}>No payment recorded for this booking.</p>
+          )}
         </section>
 
         <section className={styles.card}>
@@ -269,13 +413,6 @@ export default async function BookingDetailPage({
         </section>
 
         <section className={styles.card}>
-          <h2 className={styles.cardTitle}>Placement notes</h2>
-          <p className={styles.detailText}>
-            {booking.customer_instructions?.trim() || "No placement notes provided."}
-          </p>
-        </section>
-
-        <section className={styles.card}>
           <h2 className={styles.cardTitle}>Agreement acceptance</h2>
           <dl className={styles.detailList}>
             <div className={styles.detailRow}>
@@ -318,6 +455,13 @@ export default async function BookingDetailPage({
             is unavailable.
           </p>
         )}
+      </section>
+
+      <section className={styles.card}>
+        <h2 className={styles.cardTitle}>Placement notes</h2>
+        <p className={styles.detailText}>
+          {booking.customer_instructions?.trim() || "No placement notes provided."}
+        </p>
       </section>
     </>
   );

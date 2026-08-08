@@ -53,11 +53,11 @@ export default function FifteenYardPage() {
             <div className={styles.prose}>
               <h2>What the confirmed rate includes</h2>
               <ul>
-                <li>Five-day rental period unless otherwise agreed</li>
-                <li>Up to three tons of disposal</li>
+                <li>Residential waste: {formatCents(25000)} for 48 hours or {formatCents(27500)} for 5 days</li>
+                <li>Residential waste includes 2 tons of disposal</li>
                 <li>
                   Additional weight at {formatCents(dumpsterFees.additionalWeight.amountCents)}
-                  {" "}per ton after three tons
+                  {" "}per ton after the included residential 2 tons
                 </li>
               </ul>
               <h3>Specialty items</h3>
@@ -65,13 +65,18 @@ export default function FifteenYardPage() {
                 Mattresses, box springs, and refrigerators are listed at
                 {" "}{formatCents(dumpsterFees.specialtyItemAmountCents)} each.
               </p>
+              <p>
+                Heavy-material rentals start at {formatCents(39500)} for 5 days,
+                but they require staff approval because the included weight and
+                overage rate depend on the approved material.
+              </p>
             </div>
             <Callout>
               <h3>Keep material types separate.</h3>
               <p>
-                Dirt, sod, concrete, and gravel belong only in the heavy-material
-                rental. Residential household trash does not belong in that
-                heavy-material load.
+                Heavy-material rentals allow one clean material type only. Dirt,
+                concrete, gravel, rock, or sod cannot be mixed with household
+                trash or unapproved debris.
               </p>
             </Callout>
           </div>

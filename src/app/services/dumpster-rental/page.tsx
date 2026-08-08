@@ -36,7 +36,7 @@ export default function DumpsterRentalPage() {
           <SectionIntro
             eyebrow="Rate-sheet options"
             title="Three material-and-size combinations."
-            text="All options list a five-day rental and three included tons. Availability, delivery location, taxes, and unresolved fees still need confirmation."
+            text="Residential rates now reflect the approved July 23, 2026 pricing model. Heavy-material rentals remain staff-approved because included weight and final pricing depend on the approved material."
           />
           <div className={styles.priceGrid}>
             {dumpsterRates.map((rate) => (
@@ -57,7 +57,7 @@ export default function DumpsterRentalPage() {
               <h3>Additional weight</h3>
               <p>
                 {formatCents(dumpsterFees.additionalWeight.amountCents)} per ton
-                after the included three tons.
+                above the included residential weight allowance.
               </p>
             </article>
             <article className={styles.feeCard}>
@@ -68,10 +68,12 @@ export default function DumpsterRentalPage() {
               </p>
             </article>
             <article className={styles.feeCard}>
-              <h3>Swap-out service</h3>
+              <h3>Duration and mileage</h3>
               <p>
-                The heavy-material rate sheet lists a swap-out at the same
-                price as the original rental.
+                15-yard residential rentals are {formatCents(25000)} for 48 hours
+                or {formatCents(27500)} for 5 days. Delivery includes the first
+                20 driving miles, then adds {formatCents(dumpsterFees.excessMileage.amountCents)}
+                {" "}per excess mile.
               </p>
             </article>
           </div>
@@ -95,11 +97,11 @@ export default function DumpsterRentalPage() {
               </p>
             </div>
             <Callout>
-              <h3>Some totals cannot be calculated yet.</h3>
+              <h3>Some charges still require staff review.</h3>
               <p>
-                Delivery-zone charges, extra-day rates, prohibited-material
-                charges, overloaded-container charges, and applicable taxes are
-                not confirmed. They require review before booking opens.
+                Prohibited-material charges, relocation pricing, damage or
+                cleaning charges, and applicable taxes still depend on the
+                documented circumstances of the job.
               </p>
             </Callout>
           </div>

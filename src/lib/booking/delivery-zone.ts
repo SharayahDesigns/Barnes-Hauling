@@ -50,13 +50,16 @@ export function haversineMiles(
 
 export function calculateDeliveryPricing(distanceMiles: number): DeliveryPricing {
   const roundedDistance = roundMiles(distanceMiles);
-  const extraMiles = Math.max(0, roundedDistance - INCLUDED_DELIVERY_RADIUS_MILES);
+  const extraMiles = Math.max(
+    0,
+    Math.ceil(roundedDistance - INCLUDED_DELIVERY_RADIUS_MILES),
+  );
 
   return {
     distanceMiles: roundedDistance,
     includedMiles: INCLUDED_DELIVERY_RADIUS_MILES,
     maxMiles: MAX_DELIVERY_RADIUS_MILES,
-    extraMiles: roundMiles(extraMiles),
+    extraMiles,
     surchargeCents: Math.round(extraMiles * EXTRA_DELIVERY_RATE_CENTS_PER_MILE),
   };
 }

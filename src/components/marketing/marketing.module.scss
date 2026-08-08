@@ -450,10 +450,29 @@
   gap: var(--space-3);
 }
 
+/* Groups the icon with its package name so the size pill stays pushed right by
+   .priceCardTop's space-between instead of the three items spreading apart. */
+.priceCardIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.priceCardPackage {
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-heading), sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .priceCardIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 3rem;
   height: 3rem;
   border-radius: 50%;

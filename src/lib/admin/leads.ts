@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { requireStaff } from "@/lib/auth/staff";
 import { resolveDumpsterServiceId } from "@/lib/booking/records";
+import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { BOOKING_STATUSES } from "./booking-status";
@@ -728,42 +729,117 @@ export async function createManualBooking(
   };
 }
 
+/**
+ * Removes stored objects and their file rows for a booking or quote. Storage is
+ * cleared first: an orphaned database row is recoverable, an orphaned private
+ * object is not visible anywhere in the admin.
+ */
+async function deleteAttachedFiles(
+  supabase: ReturnType<typeof createAdminClient>,
+  column: "booking_id" | "quote_id",
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const filesResult = await supabase
+    .from("files")
+    .select("id, bucket_id, object_path, legal_hold")
+    .eq(column, id);
+  if (filesResult.error) {
+    return { ok: false, error: "Could not read attached files." };
+  }
+
+  const files =
+    (filesResult.data as Array<{
+      id: string;
+      bucket_id: string;
+      object_path: string;
+      legal_hold: boolean;
+    }> | null) ?? [];
+  if (files.length === 0) return { ok: true };
+
+  if (files.some((file) => file.legal_hold)) {
+    return { ok: false, error: "A file on this record is under legal hold." };
+  }
+
+  const byBucket = new Map<string, string[]>();
+  for (const file of files) {
+    byBucket.set(file.bucket_id, [
+      ...(byBucket.get(file.bucket_id) ?? []),
+      file.object_path,
+    ]);
+  }
+  for (const [bucket, paths] of byBucket) {
+    await supabase.storage.from(bucket).remove(paths);
+  }
+
+  const removed = await supabase
+    .from("files")
+    .delete()
+    .in(
+      "id",
+      files.map((file) => file.id),
+    );
+  if (removed.error) {
+    return { ok: false, error: "Could not remove attached files." };
+  }
+  return { ok: true };
+}
+
 export async function deleteBooking(formData: FormData): Promise<void> {
   await requireStaff();
   const id = String(formData.get("id") ?? "");
-  if (!id) return;
+  if (!id) {
+    redirect(leadsPathWithMessage("error", "Could not delete that booking."));
+  }
 
   const supabase = createAdminClient();
   const bookingResult = await supabase
     .from("bookings")
-    .select("status")
+    .select("status, booking_number")
     .eq("id", id)
     .single();
-  if (
-    bookingResult.error ||
-    !bookingResult.data ||
-    !["draft", "cancelled"].includes(bookingResult.data.status)
-  ) {
-    return;
+  if (bookingResult.error || !bookingResult.data) {
+    redirect(leadsPathWithMessage("error", "Could not find that booking."));
+  }
+  const bookingNumber = bookingResult.data.booking_number as number;
+  if (!["draft", "cancelled"].includes(bookingResult.data.status as string)) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        "Only draft or cancelled bookings can be deleted. Cancel it first.",
+      ),
+    );
   }
 
+  // Payments are never deletable, and bookings are referenced with ON DELETE
+  // RESTRICT, so a paid booking cannot be removed. Say so instead of failing
+  // silently.
   const payments = await supabase
     .from("payments")
     .select("id", { count: "exact", head: true })
     .eq("booking_id", id);
   if (payments.error && payments.error.code !== "42P01") {
-    return;
+    redirect(leadsPathWithMessage("error", "Could not check payment records."));
   }
   if ((payments.count ?? 0) > 0) {
-    return;
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Booking #${bookingNumber} has a payment record and cannot be deleted. Cancel it instead.`,
+      ),
+    );
+  }
+
+  const files = await deleteAttachedFiles(supabase, "booking_id", id);
+  if (!files.ok) {
+    redirect(leadsPathWithMessage("error", files.error));
   }
 
   const snapshots = await supabase
     .from("booking_price_snapshots")
-    .select("id, finalized_at")
+    .select("id")
     .eq("booking_id", id);
   if (snapshots.error) {
-    return;
+    redirect(leadsPathWithMessage("error", "Could not read price snapshots."));
   }
   const snapshotIds = (snapshots.data ?? []).map((row) => row.id as string);
   if (snapshotIds.length > 0) {
@@ -775,6 +851,268 @@ export async function deleteBooking(formData: FormData): Promise<void> {
   if (snapshotIds.length > 0) {
     await supabase.from("booking_price_snapshots").delete().in("id", snapshotIds);
   }
-  await supabase.from("bookings").delete().eq("id", id);
+
+  const removed = await supabase.from("bookings").delete().eq("id", id);
+  if (removed.error) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Could not delete booking #${bookingNumber}: ${removed.error.message}`,
+      ),
+    );
+  }
+
   revalidatePath("/admin/leads");
+  redirect(leadsPathWithMessage("notice", `Booking #${bookingNumber} deleted.`));
+}
+
+function parseDollarsToCents(raw: string): number | null {
+  const cleaned = raw.trim().replace(/[$,\s]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  // Round after scaling: 3.5 * 100 is 350.00000000000006 in binary floating point.
+  return Math.round(Number(cleaned) * 100);
+}
+
+function centsToInput(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+/**
+ * Requests a refund from Stripe. Deliberately does NOT write the refunded state
+ * itself — the verified charge.refunded webhook does, the same way payment
+ * state is only ever written by a verified webhook. That also means a refund
+ * issued straight from the Stripe dashboard lands in the same place.
+ */
+export async function refundBookingPayment(formData: FormData): Promise<void> {
+  await requireStaff();
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const amountRaw = String(formData.get("amount") ?? "");
+  const confirmRaw = String(formData.get("confirmAmount") ?? "");
+
+  if (!bookingId) {
+    redirect(leadsPathWithMessage("error", "Could not process that refund."));
+  }
+
+  const supabase = createAdminClient();
+  const bookingResult = await supabase
+    .from("bookings")
+    .select("booking_number")
+    .eq("id", bookingId)
+    .single();
+  if (bookingResult.error || !bookingResult.data) {
+    redirect(leadsPathWithMessage("error", "Could not find that booking."));
+  }
+  const bookingNumber = bookingResult.data.booking_number as number;
+
+  const paymentResult = await supabase
+    .from("payments")
+    .select("id, status, amount_cents, stripe_payment_intent_id, metadata")
+    .eq("booking_id", bookingId)
+    .eq("status", "succeeded")
+    .maybeSingle();
+
+  const payment = paymentResult.data as {
+    id: string;
+    status: string;
+    amount_cents: number;
+    stripe_payment_intent_id: string | null;
+    metadata: Record<string, unknown> | null;
+  } | null;
+
+  if (!payment) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Booking #${bookingNumber} has no settled payment to refund.`,
+      ),
+    );
+  }
+  if (!payment.stripe_payment_intent_id) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Booking #${bookingNumber} has no Stripe payment reference.`,
+      ),
+    );
+  }
+
+  const alreadyRefunded =
+    typeof payment.metadata?.refunded_amount_cents === "number"
+      ? payment.metadata.refunded_amount_cents
+      : 0;
+  const refundable = payment.amount_cents - alreadyRefunded;
+  if (refundable <= 0) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Booking #${bookingNumber} is already fully refunded.`,
+      ),
+    );
+  }
+
+  const amountCents = parseDollarsToCents(amountRaw);
+  const confirmCents = parseDollarsToCents(confirmRaw);
+  if (amountCents === null) {
+    redirect(
+      leadsPathWithMessage("error", "Enter a refund amount like 350.00."),
+    );
+  }
+  if (confirmCents === null || confirmCents !== amountCents) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        "Refund not sent: the confirmation amount did not match.",
+      ),
+    );
+  }
+  if (amountCents <= 0) {
+    redirect(leadsPathWithMessage("error", "Refund amount must be more than $0."));
+  }
+  if (amountCents > refundable) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Refund exceeds the ${centsToInput(refundable)} still refundable on booking #${bookingNumber}.`,
+      ),
+    );
+  }
+
+  try {
+    await getStripe().refunds.create(
+      {
+        payment_intent: payment.stripe_payment_intent_id,
+        amount: amountCents,
+        metadata: {
+          bookingId,
+          bookingNumber: String(bookingNumber),
+        },
+      },
+      {
+        // A double-submit for the same booking and amount reuses the original
+        // refund rather than issuing a second one.
+        idempotencyKey: `refund_${payment.id}_${alreadyRefunded}_${amountCents}`,
+      },
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Stripe rejected the refund.";
+    console.error("Stripe refund failed", error);
+    redirect(leadsPathWithMessage("error", `Refund failed: ${message}`));
+  }
+
+  // Mark the request so the row reads "pending" instead of looking unchanged
+  // while the charge.refunded webhook is still in flight. The webhook overwrites
+  // this with the settled amount, and the marker survives a page refresh.
+  await supabase
+    .from("payments")
+    .update({
+      metadata: {
+        ...(payment.metadata ?? {}),
+        refund_requested_cents: amountCents,
+        refund_requested_at: new Date().toISOString(),
+      },
+    })
+    .eq("id", payment.id);
+
+  revalidatePath("/admin/leads");
+  redirect(
+    leadsPathWithMessage(
+      "notice",
+      `Refund of $${centsToInput(amountCents)} sent to Stripe for booking #${bookingNumber}. It will appear here once Stripe confirms it.`,
+    ),
+  );
+}
+
+export async function deleteQuote(formData: FormData): Promise<void> {
+  await requireStaff();
+  const id = String(formData.get("id") ?? "");
+  if (!id) {
+    redirect(leadsPathWithMessage("error", "Could not delete that quote."));
+  }
+
+  const supabase = createAdminClient();
+  const quoteResult = await supabase
+    .from("quotes")
+    .select("quote_number")
+    .eq("id", id)
+    .single();
+  if (quoteResult.error || !quoteResult.data) {
+    redirect(leadsPathWithMessage("error", "Could not find that quote."));
+  }
+  const quoteNumber = quoteResult.data.quote_number as number;
+
+  const revisionsResult = await supabase
+    .from("quote_revisions")
+    .select("id")
+    .eq("quote_id", id);
+  if (revisionsResult.error) {
+    redirect(leadsPathWithMessage("error", "Could not read quote revisions."));
+  }
+  const revisionIds = (revisionsResult.data ?? []).map((row) => row.id as string);
+
+  // A revision that became a booking is that booking's pricing provenance.
+  // Removing it would leave the booking unable to explain its own price.
+  if (revisionIds.length > 0) {
+    const [linkedBookings, linkedSnapshots] = await Promise.all([
+      supabase
+        .from("bookings")
+        .select("booking_number")
+        .in("source_quote_revision_id", revisionIds)
+        .limit(1),
+      supabase
+        .from("booking_price_snapshots")
+        .select("id", { count: "exact", head: true })
+        .in("source_quote_revision_id", revisionIds),
+    ]);
+
+    const blockingBooking = (
+      linkedBookings.data as Array<{ booking_number: number }> | null
+    )?.[0];
+    if (blockingBooking || (linkedSnapshots.count ?? 0) > 0) {
+      redirect(
+        leadsPathWithMessage(
+          "error",
+          blockingBooking
+            ? `Quote #${quoteNumber} became booking #${blockingBooking.booking_number} and cannot be deleted.`
+            : `Quote #${quoteNumber} is referenced by a booking price record and cannot be deleted.`,
+        ),
+      );
+    }
+  }
+
+  const files = await deleteAttachedFiles(supabase, "quote_id", id);
+  if (!files.ok) {
+    redirect(leadsPathWithMessage("error", files.error));
+  }
+
+  if (revisionIds.length > 0) {
+    await supabase.from("quote_items").delete().in("quote_revision_id", revisionIds);
+    const removedRevisions = await supabase
+      .from("quote_revisions")
+      .delete()
+      .in("id", revisionIds);
+    if (removedRevisions.error) {
+      redirect(
+        leadsPathWithMessage(
+          "error",
+          `Could not delete quote #${quoteNumber}: ${removedRevisions.error.message}`,
+        ),
+      );
+    }
+  }
+
+  await supabase.from("quote_status_history").delete().eq("quote_id", id);
+
+  const removed = await supabase.from("quotes").delete().eq("id", id);
+  if (removed.error) {
+    redirect(
+      leadsPathWithMessage(
+        "error",
+        `Could not delete quote #${quoteNumber}: ${removed.error.message}`,
+      ),
+    );
+  }
+
+  revalidatePath("/admin/leads");
+  redirect(leadsPathWithMessage("notice", `Quote #${quoteNumber} deleted.`));
 }

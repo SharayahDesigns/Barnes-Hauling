@@ -3,7 +3,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { denverDate, todayInDenver } from "./records";
-import { SIZE_KEYS, SIZE_KEY_TO_DUMPSTER_SIZE } from "./schema";
 import type { DeliveryAvailability, UnavailableReason } from "./types";
 
 type AdminDb = SupabaseClient;
@@ -55,7 +54,7 @@ export async function getDeliveryAvailability(
   const maxDate = addDaysIso(minDate, WINDOW_DAYS);
   const minInstant = `${minDate}T00:00:00Z`;
 
-  const [blackoutResult, rulesResult, bookingsResult, assignmentsResult] =
+  const [blackoutResult, rulesResult, bookingsResult, assignmentsResult, serviceItemsResult] =
     await Promise.all([
       supabase
         .from("blackout_dates")
@@ -80,6 +79,11 @@ export async function getDeliveryAvailability(
         )
         .in("status", ["reserved", "assigned"])
         .gte("ends_at", minInstant),
+      supabase
+        .from("service_items")
+        .select("code, dumpster_sizes(code)")
+        .eq("item_kind", "rental_package")
+        .eq("status", "active"),
     ]);
 
   const blackouts = (blackoutResult.data ?? []) as Array<{
@@ -100,6 +104,13 @@ export async function getDeliveryAvailability(
     ends_at: string;
     bookings: { status: string } | null;
     dumpsters: { dumpster_sizes: { code: string } | null } | null;
+  }>;
+  // PostgREST returns this to-one embed as an object, not a single-element
+  // array, but the generated types describe it as an array. Cast through
+  // unknown (as the assignments embed above does) to the verified shape.
+  const serviceItems = (serviceItemsResult.data ?? []) as unknown as Array<{
+    code: string;
+    dumpster_sizes: { code: string } | null;
   }>;
 
   const hasRules = rules.length > 0;
@@ -170,9 +181,13 @@ export async function getDeliveryAvailability(
   };
 
   const bySizeKey: Record<string, UnavailableReason[]> = {};
-  for (const sizeKey of SIZE_KEYS) {
-    const code = SIZE_KEY_TO_DUMPSTER_SIZE[sizeKey];
-    const occupancy = occupancyBySize.get(code);
+  for (const serviceItem of serviceItems) {
+    const sizeKey = serviceItem.code;
+    const code = serviceItem.dumpster_sizes?.code;
+    // A missing size link only disables the size-specific occupancy check.
+    // Blackouts and closed weekdays still apply: failing open here would offer
+    // customers dates the business has closed.
+    const occupancy = code ? occupancyBySize.get(code) : undefined;
     const list: UnavailableReason[] = [];
 
     for (let date = minDate; date <= maxDate; date = addDaysIso(date, 1)) {

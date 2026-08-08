@@ -159,10 +159,20 @@
   text-decoration: none;
 }
 
+/* Customer name — the primary way a row is identified, so it reads heavier
+   than the booking number and dates around it. */
+.tableLinkStrong {
+  color: var(--color-ink);
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .backLink:hover,
 .backLink:focus-visible,
 .tableLink:hover,
-.tableLink:focus-visible {
+.tableLink:focus-visible,
+.tableLinkStrong:hover,
+.tableLinkStrong:focus-visible {
   text-decoration: underline;
 }
 
@@ -214,6 +224,32 @@
   line-height: 1;
 }
 
+/* Two stats per row on phones. The auto-fit track above needs 11rem per column,
+   which no phone viewport can fit twice, so every card was stacking and pushing
+   the tables far below the fold. Pairing them halves the scroll. */
+@media (max-width: 47.99rem) {
+  .statGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+
+  .statCard {
+    padding: var(--space-3);
+  }
+
+  .statLabel {
+    font-size: 0.72rem;
+    line-height: 1.3;
+    /* Keeps both cards in a row the same height when one label wraps. */
+    min-height: 1.9rem;
+  }
+
+  .statValue {
+    font-size: 1.5rem;
+  }
+}
+
 /* ---- Tables ---- */
 .tableWrap {
   overflow-x: auto;
@@ -244,7 +280,48 @@
 
 .tableCellStack {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.2rem;
+}
+
+/* Secondary line inside a stacked cell — created date, end date, card. Pairing
+   related values vertically is what keeps the bookings table from needing
+   horizontal scroll on a laptop. */
+.cellMeta {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+/* Laptop widths: the bookings table still carries 10 columns, several holding
+   selects. Tighten density here rather than letting the row overflow. */
+@media (min-width: 48rem) and (max-width: 87.5rem) {
+  .table {
+    font-size: 0.78rem;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--space-2);
+  }
+
+  .cellWrap {
+    min-width: 10rem;
+  }
+
+  .inlineSelect {
+    padding: 0.3rem 0.35rem;
+    font-size: 0.75rem;
+    max-width: 8.5rem;
+  }
+
+  .cellMeta {
+    font-size: 0.68rem;
+  }
+
+  .tableSnapshotMap {
+    width: 5.5rem;
+    height: 3.75rem;
+  }
 }
 
 @media (max-width: 47.99rem) {
@@ -367,10 +444,105 @@
   height: 1rem;
 }
 
+/* Clicking the lock reveals why the booking is undeletable. A native <details>
+   keeps it working without JS and on touch, where a title tooltip never shows. */
+.lockDisclosure summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.lockDisclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.lockDisclosure summary:hover,
+.lockDisclosure summary:focus-visible {
+  color: var(--color-ink);
+}
+
+.lockReason {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.7rem;
+  max-width: 18rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
 .empty {
   padding: var(--space-6);
   text-align: center;
   color: var(--color-text-muted);
+}
+
+/* Refund control. Collapsed by default so a form that moves real money is
+   never one stray click away, and the row stays readable. */
+.refundDisclosure {
+  min-width: 8rem;
+}
+
+.refundSummary {
+  cursor: pointer;
+  padding: 0.3rem 0.6rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-danger);
+  list-style: none;
+  display: inline-block;
+}
+
+.refundSummary::-webkit-details-marker {
+  display: none;
+}
+
+.refundSummary:hover {
+  border-color: var(--color-danger);
+}
+
+.refundForm {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.refundLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.refundInput {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  font-size: var(--text-small);
+}
+
+.refundButton {
+  margin-top: 0.2rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-danger);
+  color: white;
+  font-weight: 700;
+  font-size: var(--text-small);
+  cursor: pointer;
 }
 
 /* ---- Forms ---- */
@@ -847,6 +1019,46 @@
 .field {
   display: grid;
   gap: var(--space-2);
+  /* Number inputs have a default intrinsic width that would otherwise push a
+     grid track wider than its share and overflow the row. */
+  min-width: 0;
+}
+
+/* Capacity + dimensions as a single row. Spans the parent grid so it is not
+   constrained by the two-column layout around it. */
+.measureRow {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 60rem) {
+  .measureRow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+}
+
+@media (max-width: 30rem) {
+  .measureRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Allowed vs not-allowed materials, side by side on desktop. Tracks are
+   minmax(0, …) so a long chip wraps inside its column instead of widening it. */
+.materialsRow {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 60rem) {
+  .materialsRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .label {
@@ -958,6 +1170,12 @@
   font-size: var(--text-small);
 }
 
+.inlineStatusNote {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .smallButton {
   padding: 0.4rem 0.75rem;
   border: 0;
@@ -1022,6 +1240,39 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+
+.inlineInputAction {
+  position: relative;
+}
+
+.inlineInputActionField {
+  padding-right: 4.75rem;
+}
+
+.inlineInputActionButton {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  padding: 0.38rem 0.7rem;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 0.1rem);
+  background: var(--color-brand);
+  color: white;
+  font-weight: 700;
+  font-size: 0.76rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.inlineInputActionButton:hover {
+  background: var(--color-brand-deep);
+}
+
+.inlineInputActionButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .chip {
@@ -1211,6 +1462,68 @@
   box-shadow: inset 0 0 0 0.0625rem var(--color-danger);
 }
 
+/* Retired containers are kept visible for history but recede from the active
+   fleet. Controls stay fully legible on hover/focus so the card is still
+   usable — this is de-emphasis, not disabling. */
+.inventoryCardRetired {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  opacity: 0.62;
+}
+
+.inventoryCardRetired:hover,
+.inventoryCardRetired:focus-within {
+  opacity: 1;
+}
+
+.inventoryCardRetired .inventoryCardThumb {
+  filter: grayscale(1);
+}
+
+/* Quote detail — reach the customer directly from the record. */
+.contactActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.contactButton,
+.contactButtonSecondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-control);
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 700;
+  font-size: var(--text-small);
+  text-decoration: none;
+  border: 0.0625rem solid transparent;
+}
+
+.contactButton {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: white;
+}
+
+.contactButtonSecondary {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-brand-deep);
+}
+
+.contactButton:hover,
+.contactButtonSecondary:hover {
+  border-color: var(--color-brand-deep);
+}
+
+.contactUnavailable {
+  align-self: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
 .inventoryFacts .factLabelDanger {
   color: var(--color-danger);
 }
@@ -1250,18 +1563,14 @@
   font-weight: 600;
 }
 
-/* ---- Inventory edit-details accordion ---- */
-.editDetails {
-  display: grid;
-  gap: var(--space-3);
-}
-
 .editSummary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  width: 100%;
   padding: 0.6rem 0.85rem;
+  border: 0;
   border-radius: var(--radius-control);
   background: var(--color-surface-muted);
   color: var(--color-brand-deep);
@@ -1271,10 +1580,6 @@
   cursor: pointer;
   list-style: none;
   transition: background 150ms ease;
-}
-
-.editSummary::-webkit-details-marker {
-  display: none;
 }
 
 .editSummary:hover {
@@ -1292,15 +1597,76 @@
   height: 1rem;
 }
 
-.editChevron {
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-  transition: transform 200ms ease;
+.editModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(11 12 10 / 55%);
+  overflow-y: auto;
 }
 
-.editDetails[open] .editChevron {
-  transform: rotate(180deg);
+.editModalCard {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  width: min(52rem, 100%);
+  max-height: min(92vh, 60rem);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+
+.editModalHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.editModalTitle {
+  margin: 0;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.35rem;
+  color: var(--color-ink);
+}
+
+.editModalSub {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.editModalClose {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-brand-deep);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.editModalClose svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.editModalClose:hover {
+  background: rgb(78 106 42 / 14%);
+}
+
+.editModalClose:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .editBody {
@@ -1310,10 +1676,107 @@
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .fieldFull {
   grid-column: 1 / -1;
+}
+
+.editModalFooter {
+  padding-top: var(--space-3);
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.editModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.editSaveButton {
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: #22950f;
+  color: white;
+  font-weight: 700;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.editSaveButton:hover {
+  background: #1c7a0c;
+}
+
+.editSaveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  padding: 0.4rem 0.75rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-weight: 700;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  background: var(--color-surface-muted);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editImagePreview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: 0.75rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.editImageThumb {
+  display: block;
+  width: 5.25rem;
+  height: 4rem;
+  object-fit: cover;
+  border-radius: 0.7rem;
+  border: 0.0625rem solid rgb(28 33 18 / 0.08);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.editImageMeta {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.editImageLabel {
+  font-weight: 700;
+  color: var(--color-ink);
+  font-size: var(--text-small);
+}
+
+.editImageHint {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 /* Add-a-dumpster: compact button that reveals the form */
@@ -1347,6 +1810,35 @@
   .addDumpsterPanel,
   .editBody {
     padding: var(--space-4);
+  }
+
+  .editModalOverlay {
+    padding: var(--space-2);
+    align-items: end;
+  }
+
+  .editModalCard {
+    width: 100%;
+    max-height: 94vh;
+    padding: var(--space-4);
+  }
+
+  .editModalActions {
+    justify-content: stretch;
+  }
+
+  .secondaryButton {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .inlineInputActionField {
+    padding-right: 4.25rem;
+  }
+
+  .editImagePreview {
+    align-items: start;
   }
 }
 

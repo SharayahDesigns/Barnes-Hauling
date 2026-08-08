@@ -202,7 +202,7 @@ export function DumpsterCard({ rate }: Readonly<{ rate: DumpsterRate }>) {
             <WeightIcon />
           </span>
           <dt>Included</dt>
-          <dd>{rate.includedTons} tons</dd>
+          <dd>{rate.includedWeightLabel}</dd>
         </div>
       </dl>
       <ul className={`${styles.checkList} ${styles.priceChecks}`}>
@@ -325,6 +325,7 @@ export function FaqList({
 type InventoryDumpster = {
   id: string;
   sizeName: string;
+  packageLabel?: string | null;
   dimensions: string;
   priceCents: number | null;
   maxWeightTons: number | null;
@@ -359,8 +360,15 @@ export function InventoryDumpsterCard({
   return (
     <article className={styles.priceCard}>
       <div className={styles.priceCardTop}>
-        <span className={styles.priceCardIcon} aria-hidden="true">
-          <HouseIcon />
+        <span className={styles.priceCardIdentity}>
+          <span className={styles.priceCardIcon} aria-hidden="true">
+            <HouseIcon />
+          </span>
+          {dumpster.packageLabel ? (
+            <span className={styles.priceCardPackage}>
+              {dumpster.packageLabel}
+            </span>
+          ) : null}
         </span>
         <span className={styles.priceCardSize}>{dumpster.sizeName}</span>
       </div>

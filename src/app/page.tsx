@@ -92,7 +92,7 @@ export default async function Home() {
             <SectionIntro
               eyebrow="Dumpster rentals made simple"
               title="Pick your size. We deliver. You fill it. We haul it away."
-              text="Flat 5-day rentals with up to 3 tons of disposal included, clear rules on what goes in, and every rate and weight limit spelled out before you book. Tell us the project and we'll get the right roll-off to your driveway or jobsite — ready for your cleanout, remodel, roofing tear-off, or landscaping haul."
+              text="Approved residential pricing starts at 48-hour and 5-day options for the 15-yard container, plus a 5-day 22-yard option. Included weight, allowed materials, and any excess-mile delivery charge are spelled out before you book."
             />
             <div className={styles.dumpsterIntroMedia}>
               <Image

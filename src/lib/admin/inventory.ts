@@ -143,6 +143,7 @@ function uploadedImageFile() {
 const createSchema = z.object({
   assetNumber: z.string().trim().min(1, "Asset number is required.").max(50),
   dumpsterSizeId: z.string().uuid("Choose a dumpster size."),
+  serviceItemId: z.string().uuid("Choose the booking package for this dumpster."),
   status: z.enum(DUMPSTER_STATUSES),
   currentLocation: optionalText(200),
   conditionNotes: optionalText(500),
@@ -157,6 +158,7 @@ const createSchema = z.object({
 const updateDetailsSchema = z.object({
   id: z.string().uuid("Missing dumpster id."),
   dumpsterSizeId: z.string().uuid("Missing dumpster size."),
+  serviceItemId: z.string().uuid("Missing booking package."),
   conditionNotes: optionalText(500),
   priceDollars: optionalPriceDollars(),
   maxWeightTons: optionalWeightTons(),
@@ -171,24 +173,15 @@ const updateDetailsSchema = z.object({
 
 export type InventoryFormState = { error?: string; success?: string };
 
-const SERVICE_ITEM_CODE_BY_ASSET_NUMBER: Record<string, string> = {
-  "BHD1-7-14-4": "dumpster_15_residential",
-  "BHD2-7-14-4": "dumpster_15_heavy_materials",
-  "BHD1-7-14-6": "dumpster_22_residential",
-};
-
 async function syncServiceItemImagePath(
   supabase: ReturnType<typeof createAdminClient>,
-  assetNumber: string,
+  serviceItemId: string,
   imagePath: string | null,
 ): Promise<void> {
-  const serviceItemCode = SERVICE_ITEM_CODE_BY_ASSET_NUMBER[assetNumber.trim().toUpperCase()];
-  if (!serviceItemCode) return;
-
   await supabase
     .from("service_items")
     .update({ image_path: imagePath })
-    .eq("code", serviceItemCode);
+    .eq("id", serviceItemId);
 }
 
 function sanitizeAssetNumber(value: string): string {
@@ -225,6 +218,7 @@ export async function createDumpster(
   const parsed = createSchema.safeParse({
     assetNumber: formData.get("assetNumber"),
     dumpsterSizeId: formData.get("dumpsterSizeId"),
+    serviceItemId: formData.get("serviceItemId"),
     status: formData.get("status"),
     currentLocation: formData.get("currentLocation") ?? undefined,
     conditionNotes: formData.get("conditionNotes") ?? undefined,
@@ -240,6 +234,12 @@ export async function createDumpster(
   }
 
   const supabase = createAdminClient();
+  const supportsServiceItemAssignments = !(
+    await supabase
+      .from("dumpsters")
+      .select("service_item_id")
+      .limit(1)
+  ).error;
   let imagePath: string | null = null;
   if (parsed.data.imageFile) {
     const upload = await uploadDumpsterImage(
@@ -253,7 +253,7 @@ export async function createDumpster(
     imagePath = upload.path ?? null;
   }
 
-  const { error } = await supabase.from("dumpsters").insert({
+  const insertPayload = {
     asset_number: parsed.data.assetNumber,
     dumpster_size_id: parsed.data.dumpsterSizeId,
     status: parsed.data.status,
@@ -265,7 +265,12 @@ export async function createDumpster(
     materials_allowed: parsed.data.materialsAllowed,
     materials_not_allowed: parsed.data.materialsNotAllowed,
     rental_duration_days: parsed.data.rentalDurationDays,
-  });
+    ...(supportsServiceItemAssignments
+      ? { service_item_id: parsed.data.serviceItemId }
+      : {}),
+  };
+
+  const { error } = await supabase.from("dumpsters").insert(insertPayload);
 
   if (error) {
     if (error.code === "23505") {
@@ -277,13 +282,17 @@ export async function createDumpster(
   if (imagePath) {
     await syncServiceItemImagePath(
       supabase,
-      parsed.data.assetNumber,
+      parsed.data.serviceItemId,
       imagePath,
     );
   }
 
   revalidatePath("/admin/inventory");
-  return { success: `Dumpster ${parsed.data.assetNumber} added.` };
+  return {
+    success: supportsServiceItemAssignments
+      ? `Dumpster ${parsed.data.assetNumber} added.`
+      : `Dumpster ${parsed.data.assetNumber} added. Booking package assignment will save after the service_item_id migration is applied.`,
+  };
 }
 
 export async function updateDumpsterDetails(
@@ -295,6 +304,7 @@ export async function updateDumpsterDetails(
   const parsed = updateDetailsSchema.safeParse({
     id: formData.get("id"),
     dumpsterSizeId: formData.get("dumpsterSizeId"),
+    serviceItemId: formData.get("serviceItemId"),
     conditionNotes: formData.get("conditionNotes") ?? undefined,
     priceDollars: formData.get("priceDollars") ?? undefined,
     maxWeightTons: formData.get("maxWeightTons") ?? undefined,
@@ -311,11 +321,19 @@ export async function updateDumpsterDetails(
   }
 
   const supabase = createAdminClient();
-  const existingResult = await supabase
+  const existingWithAssignmentResult = await supabase
     .from("dumpsters")
-    .select("asset_number, image_path")
+    .select("asset_number, image_path, service_item_id")
     .eq("id", parsed.data.id)
     .single();
+  const supportsServiceItemAssignments = !existingWithAssignmentResult.error;
+  const existingResult = supportsServiceItemAssignments
+    ? existingWithAssignmentResult
+    : await supabase
+        .from("dumpsters")
+        .select("asset_number, image_path")
+        .eq("id", parsed.data.id)
+        .single();
   if (existingResult.error || !existingResult.data) {
     return { error: "Could not find that dumpster." };
   }
@@ -333,17 +351,22 @@ export async function updateDumpsterDetails(
     imagePath = upload.path ?? imagePath;
   }
 
+  const updatePayload = {
+    condition_notes: parsed.data.conditionNotes ?? null,
+    image_path: imagePath,
+    rental_price_cents: parsed.data.priceDollars ?? null,
+    max_weight_tons: parsed.data.maxWeightTons ?? null,
+    materials_allowed: parsed.data.materialsAllowed,
+    materials_not_allowed: parsed.data.materialsNotAllowed,
+    rental_duration_days: parsed.data.rentalDurationDays,
+    ...(supportsServiceItemAssignments
+      ? { service_item_id: parsed.data.serviceItemId }
+      : {}),
+  };
+
   const { error } = await supabase
     .from("dumpsters")
-    .update({
-      condition_notes: parsed.data.conditionNotes ?? null,
-      image_path: imagePath,
-      rental_price_cents: parsed.data.priceDollars ?? null,
-      max_weight_tons: parsed.data.maxWeightTons ?? null,
-      materials_allowed: parsed.data.materialsAllowed,
-      materials_not_allowed: parsed.data.materialsNotAllowed,
-      rental_duration_days: parsed.data.rentalDurationDays,
-    })
+    .update(updatePayload)
     .eq("id", parsed.data.id);
 
   if (error) {
@@ -365,7 +388,7 @@ export async function updateDumpsterDetails(
   if (parsed.data.imageFile) {
     await syncServiceItemImagePath(
       supabase,
-      String(existingResult.data.asset_number),
+      parsed.data.serviceItemId,
       imagePath,
     );
   }
@@ -377,7 +400,11 @@ export async function updateDumpsterDetails(
   }
 
   revalidatePath("/admin/inventory");
-  return { success: "Dumpster details updated." };
+  return {
+    success: supportsServiceItemAssignments
+      ? "Dumpster details updated."
+      : "Dumpster details updated. Booking package changes will save after the service_item_id migration is applied.",
+  };
 }
 
 export async function updateDumpsterStatus(

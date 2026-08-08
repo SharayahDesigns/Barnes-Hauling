@@ -1,20 +1,19 @@
 import { dumpsterRates } from "@/config/public-content";
 
-import type { SizeKey } from "./schema";
-
 /**
  * Selectable container options for the booking flow, derived from the confirmed
  * catalog in `public-content.ts` so prices/specs have one source of truth.
  */
 export type BookingSizeOption = Readonly<{
-  key: SizeKey;
+  key: string;
   size: string;
   use: string;
   dimensions: string;
   image: string;
   rentalDays: number;
   rentalDayOptions: readonly number[];
-  includedTons: number;
+  includedTons: number | null;
+  includedWeightLabel: string;
   materialRules: readonly string[];
   price:
     | { type: "fixed"; amountCents: number }
@@ -29,8 +28,9 @@ export const STATIC_BOOKING_SIZE_OPTIONS: readonly BookingSizeOption[] = dumpste
     dimensions: rate.dimensions,
     image: rate.image,
     rentalDays: rate.rentalDays,
-    rentalDayOptions: [rate.rentalDays],
+    rentalDayOptions: rate.rentalDayOptions,
     includedTons: rate.includedTons,
+    includedWeightLabel: rate.includedWeightLabel,
     materialRules: rate.materialRules,
     price: rate.price,
   }),
@@ -38,13 +38,21 @@ export const STATIC_BOOKING_SIZE_OPTIONS: readonly BookingSizeOption[] = dumpste
 
 export function getBookingSizeOption(
   options: readonly BookingSizeOption[],
-  key: SizeKey,
+  key: string,
 ): BookingSizeOption {
   const option = options.find((item) => item.key === key);
   if (!option) {
     throw new Error(`Unknown dumpster size option: ${key}`);
   }
   return option;
+}
+
+export function resolveBookingPrice(
+  option: BookingSizeOption,
+  rentalDays: number,
+): BookingSizeOption["price"] {
+  void rentalDays;
+  return option.price;
 }
 
 /**
@@ -57,9 +65,24 @@ export const PREPAYMENT_AGREEMENT_VERSION = "load-and-weight-terms-2026-07-draft
 
 export const PREPAYMENT_AGREEMENT_TERMS = [
   "I will only load materials allowed for the container I selected, and no hazardous or prohibited materials.",
-  "Each rental includes up to 3 tons of disposal. Weight above the included limit is billed at $50 per ton, based on the disposal facility's weight ticket.",
-  "Additional documented charges (prohibited materials, overloaded or blocked containers, extra days, or damage) may apply and will be itemized before they are charged.",
+  "Residential 15-yard rentals include 2 tons, and residential 22-yard rentals include 3 tons. Weight above the included limit is billed at $50 per ton based on the disposal facility's weight ticket.",
+  "Heavy-material rentals are staff-approved only. Included weight and any overage rate depend on the approved material before payment.",
+  "Additional documented charges such as extra days, blocked pickup, failed delivery, prohibited materials, or damage may apply and will be itemized before they are charged.",
 ] as const;
+
+/**
+ * Whether the booking flow offers the SMS opt-in.
+ *
+ * Off until Twilio is wired up and A2P 10DLC registration clears, because
+ * collecting consent to text while no texting exists asks customers to agree to
+ * something that cannot happen. `smsUpdates` stays in the form state and schema
+ * (always false), and recordTransactionalConsents only writes an SMS consent
+ * row when it is true — so nothing records consent that was not given.
+ *
+ * Flip to true once SMS sending is live; the checkbox and its stored consent
+ * wording are unchanged and ready.
+ */
+export const SMS_UPDATES_ENABLED = false;
 
 export const TRANSACTIONAL_CONSENT_VERSION = "transactional-2026-07-v1";
 

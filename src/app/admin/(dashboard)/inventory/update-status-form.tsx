@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin/inventory";
 
 import styles from "../../admin.module.scss";
+import { AutoSubmitSelect } from "../leads/auto-submit-select";
 
 const INITIAL: InventoryFormState = {};
 
@@ -25,21 +26,24 @@ export function UpdateStatusForm({
   return (
     <form action={formAction} className={styles.inlineForm}>
       <input type="hidden" name="id" value={id} />
-      <select
+      <AutoSubmitSelect
         name="status"
         defaultValue={status}
         className={styles.inlineSelect}
-        aria-label={`Status for ${assetNumber}`}
+        ariaLabel={`Status for ${assetNumber}`}
+        saveLabel="Save status"
       >
         {DUMPSTER_STATUSES.map((option) => (
           <option key={option} value={option}>
             {humanizeStatus(option)}
           </option>
         ))}
-      </select>
-      <button type="submit" className={styles.smallButton} disabled={pending}>
-        {pending ? "Saving…" : "Save"}
-      </button>
+      </AutoSubmitSelect>
+      {pending ? (
+        <span className={styles.inlineStatusNote} role="status" aria-live="polite">
+          Saving...
+        </span>
+      ) : null}
       {state.error ? (
         <p className={styles.error} role="alert">
           {state.error}

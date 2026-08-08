@@ -41,7 +41,7 @@ export function MaterialsInput({
         {label}
       </label>
       <input type="hidden" name={inputName} value={materials.join("\n")} />
-      <div className={styles.inlineForm}>
+      <div className={styles.inlineInputAction}>
         <input
           id={inputId}
           value={draft}
@@ -52,12 +52,12 @@ export function MaterialsInput({
               addMaterial(draft);
             }
           }}
-          className={styles.input}
+          className={`${styles.input} ${styles.inlineInputActionField}`}
           placeholder="Add one material"
         />
         <button
           type="button"
-          className={styles.smallButton}
+          className={styles.inlineInputActionButton}
           onClick={() => addMaterial(draft)}
         >
           Add

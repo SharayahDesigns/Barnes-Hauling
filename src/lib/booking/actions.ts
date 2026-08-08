@@ -12,9 +12,10 @@ import {
   resolveDumpsterServiceId,
   resolveServiceItemId,
   savePlacementPhoto,
+  todayInDenver,
   verifyTurnstile,
 } from "./records";
-import { bookingDraftSchema, SIZE_KEY_TO_ITEM_CODE } from "./schema";
+import { bookingDraftSchema, customQuoteRequestSchema } from "./schema";
 import { checkServiceArea } from "./service-area";
 import type { PostalCodeCheck, SubmitBookingResult } from "./types";
 
@@ -50,7 +51,7 @@ export async function checkPostalCodeAction(
 
 /**
  * Persists a not-yet-paid dumpster request as a draft quote (a lead). Used for
- * the 22-yard "quote required" path and any size we cannot price online yet.
+ * heavy-material rentals and any size we cannot price online yet.
  * Paid sizes go through `createBookingCheckout` instead.
  *
  * Runs through the service-role admin client because there is no customer auth
@@ -85,10 +86,7 @@ export async function submitBookingDraft(
   let serviceItemId: string;
   try {
     serviceId = await resolveDumpsterServiceId(supabase);
-    serviceItemId = await resolveServiceItemId(
-      supabase,
-      SIZE_KEY_TO_ITEM_CODE[input.sizeKey],
-    );
+    serviceItemId = await resolveServiceItemId(supabase, input.sizeKey);
   } catch {
     return { ok: false, error: "Dumpster service is unavailable right now." };
   }
@@ -140,7 +138,7 @@ export async function submitBookingDraft(
         flow: "dumpster_booking",
         version: "booking_flow_v1_test_mode",
         size_key: input.sizeKey,
-        service_item_code: SIZE_KEY_TO_ITEM_CODE[input.sizeKey],
+        service_item_code: input.sizeKey,
         rental_days: input.rentalDays,
         needed_date: input.neededDate,
         placement_notes: input.placementNotes ?? null,
@@ -204,6 +202,160 @@ export async function submitBookingDraft(
     });
   } catch (error) {
     console.error("Booking draft email send failed", error);
+  }
+
+  return {
+    ok: true,
+    quoteNumber: quoteInsert.data.quote_number as number,
+    serviceAreaConfirmed,
+  };
+}
+
+export async function submitCustomQuoteRequest(
+  raw: unknown,
+): Promise<SubmitBookingResult> {
+  const input =
+    raw instanceof FormData
+      ? {
+          postalCode: String(raw.get("postalCode") ?? ""),
+          addressLine1: String(raw.get("addressLine1") ?? ""),
+          addressLine2: String(raw.get("addressLine2") ?? ""),
+          city: String(raw.get("city") ?? ""),
+          region: String(raw.get("region") ?? ""),
+          sizeKey: String(raw.get("sizeKey") ?? ""),
+          rentalDays: String(raw.get("rentalDays") ?? ""),
+          neededDate: String(raw.get("neededDate") ?? ""),
+          firstName: String(raw.get("firstName") ?? ""),
+          lastName: String(raw.get("lastName") ?? ""),
+          email: String(raw.get("email") ?? ""),
+          phone: String(raw.get("phone") ?? ""),
+          customerNote: String(raw.get("customerNote") ?? ""),
+          placementLatitude: raw.get("placementLatitude")
+            ? Number(raw.get("placementLatitude"))
+            : undefined,
+          placementLongitude: raw.get("placementLongitude")
+            ? Number(raw.get("placementLongitude"))
+            : undefined,
+          turnstileToken: raw.get("turnstileToken")
+            ? String(raw.get("turnstileToken"))
+            : undefined,
+        }
+      : (raw as Record<string, unknown>);
+
+  const parsed = customQuoteRequestSchema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? "form");
+      fieldErrors[key] ??= issue.message;
+    }
+    return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
+  }
+
+  const customQuote = parsed.data;
+
+  if (customQuote.neededDate < todayInDenver()) {
+    return {
+      ok: false,
+      error: "Choose a delivery date that is today or later.",
+      fieldErrors: { neededDate: "Choose a delivery date that is today or later." },
+    };
+  }
+
+  if (!(await verifyTurnstile(customQuote.turnstileToken))) {
+    return { ok: false, error: "Spam check failed. Please try again." };
+  }
+
+  const supabase = createAdminClient();
+
+  let serviceId: string;
+  let serviceItemId: string;
+  try {
+    serviceId = await resolveDumpsterServiceId(supabase);
+    serviceItemId = await resolveServiceItemId(supabase, customQuote.sizeKey);
+  } catch {
+    return { ok: false, error: "Dumpster service is unavailable right now." };
+  }
+
+  let customerId: string;
+  let serviceAddressId: string;
+  let serviceAreaConfirmed: boolean;
+  let serviceArea:
+    | Awaited<ReturnType<typeof createCustomerAndAddress>>["serviceArea"]
+    | null = null;
+  try {
+    const created = await createCustomerAndAddress(supabase, customQuote);
+    customerId = created.customerId;
+    serviceAddressId = created.serviceAddressId;
+    serviceArea = created.serviceArea;
+    serviceAreaConfirmed =
+      created.serviceArea.status === "validated" ||
+      created.serviceArea.status === "extended";
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not save your request.",
+    };
+  }
+
+  const quoteInsert = await supabase
+    .from("quotes")
+    .insert({
+      customer_id: customerId,
+      service_id: serviceId,
+      service_item_id: serviceItemId,
+      service_address_id: serviceAddressId,
+      status: "draft",
+      request_details: {
+        flow: "custom_rental_quote",
+        version: "custom_rental_quote_v1",
+        size_key: customQuote.sizeKey,
+        service_item_code: customQuote.sizeKey,
+        rental_days: customQuote.rentalDays,
+        needed_date: customQuote.neededDate,
+        customer_note: customQuote.customerNote ?? null,
+        service_area_check: serviceAreaConfirmed ? "validated" : "unconfirmed",
+        delivery_pricing:
+          !serviceArea || serviceArea.status === "unconfirmed"
+            ? null
+            : {
+                status: serviceArea.status,
+                distance_miles: serviceArea.distanceMiles,
+                included_miles: serviceArea.includedMiles,
+                max_miles: serviceArea.maxMiles,
+                surcharge_cents: serviceArea.surchargeCents,
+              },
+        custom_rental_quote: true,
+      },
+    })
+    .select("id, quote_number")
+    .single();
+
+  if (quoteInsert.error || !quoteInsert.data) {
+    return { ok: false, error: "Could not save your quote request. Please retry." };
+  }
+
+  try {
+    await sendBookingDraftEmails({
+      quoteNumber: quoteInsert.data.quote_number as number,
+      firstName: customQuote.firstName,
+      lastName: customQuote.lastName,
+      email: customQuote.email,
+      phone: customQuote.phone,
+      sizeKey: customQuote.sizeKey,
+      requestedRentalDays: customQuote.rentalDays,
+      neededDate: customQuote.neededDate,
+      addressLine1: customQuote.addressLine1,
+      addressLine2: customQuote.addressLine2 ?? null,
+      city: customQuote.city,
+      region: customQuote.region,
+      postalCode: customQuote.postalCode,
+      customerNote: customQuote.customerNote ?? null,
+      serviceAreaConfirmed,
+      requestKind: "custom_quote",
+    });
+  } catch (error) {
+    console.error("Custom quote email send failed", error);
   }
 
   return {
