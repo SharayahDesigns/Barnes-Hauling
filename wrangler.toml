@@ -1,4 +1,14 @@
 name = "barnes-hauling"
+main = ".open-next/worker.js"
 compatibility_date = "2026-08-30"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".vercel/output/static"
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[observability]
+enabled = true
+
+[build]
+command = "npm run cf:build"
