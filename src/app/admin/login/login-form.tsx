@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { signInStaff, type SignInState } from "@/lib/auth/actions";
@@ -44,6 +45,11 @@ export function LoginForm() {
           required
         />
       </div>
+      <p className={styles.supportText}>
+        <Link href="/admin/forgot-password" className={styles.textLink}>
+          Forgot your password?
+        </Link>
+      </p>
       <button
         type="submit"
         className={styles.primaryButton}

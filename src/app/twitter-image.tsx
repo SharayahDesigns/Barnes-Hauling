@@ -5,7 +5,7 @@ import {
   renderOgPreview,
 } from "@/lib/og/preview";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const alt = OG_ALT;
 export const size = OG_SIZE;
 export const contentType = OG_CONTENT_TYPE;

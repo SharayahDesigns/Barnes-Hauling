@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { requireStaff } from "@/lib/auth/staff";
@@ -194,8 +193,8 @@ async function uploadDumpsterImage(
   file: File,
 ): Promise<{ path?: string; error?: string }> {
   const extension = file.name.split(".").pop()?.toLowerCase() || "bin";
-  const path = `dumpsters/${sanitizeAssetNumber(assetNumber)}/${randomUUID()}.${extension}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const path = `dumpsters/${sanitizeAssetNumber(assetNumber)}/${crypto.randomUUID()}.${extension}`;
+  const buffer = await file.arrayBuffer();
 
   const upload = await supabase.storage.from(DUMPSTER_IMAGE_BUCKET).upload(path, buffer, {
     contentType: file.type,

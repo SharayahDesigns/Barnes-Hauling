@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Barlow, Barlow_Condensed, Geist_Mono } from "next/font/google";
 
+import { AuthRedirectListener } from "@/components/auth/auth-redirect-listener";
 import { HideOnAdmin } from "@/components/site/hide-on-admin";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
@@ -8,6 +9,8 @@ import { businessConfig } from "@/config/business";
 import { getSiteUrl } from "@/lib/site-url";
 
 import "./globals.scss";
+
+export const runtime = "edge";
 
 const anton = Anton({
   variable: "--font-display",
@@ -95,6 +98,7 @@ export default function RootLayout({
       className={`${anton.variable} ${barlowCondensed.variable} ${barlow.variable} ${geistMono.variable}`}
     >
       <body>
+        <AuthRedirectListener />
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>

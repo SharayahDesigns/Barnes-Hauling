@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/scheduling", label: "Scheduling" },
   { href: "/admin/service-area", label: "Service area" },
+  { href: "/admin/account/password", label: "Password" },
 ] as const;
 
 export function AdminNav() {

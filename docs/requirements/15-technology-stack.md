@@ -6,7 +6,7 @@
 - React
 - TypeScript
 - SCSS Modules
-- Vercel
+- Cloudflare Pages
 
 ## Backend
 
@@ -69,7 +69,7 @@
 - Prettier
 - Type checking
 - Automated tests
-- Vercel preview deployments
+- Cloudflare Pages preview deployments
 
 ## Security
 

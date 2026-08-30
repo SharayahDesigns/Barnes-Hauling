@@ -1,4 +1,4 @@
-import type Stripe from "stripe";
+import Stripe from "stripe";
 
 import { autoAssignDumpster } from "@/lib/booking/auto-assign";
 import { denverDate } from "@/lib/booking/records";
@@ -6,8 +6,7 @@ import { sendPaymentReceiptEmails } from "@/lib/resend/send";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Stripe signature verification needs the raw body and Node APIs.
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
@@ -22,7 +21,13 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = await getStripe().webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      webhookSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
+    );
   } catch {
     return new Response("Invalid signature.", { status: 400 });
   }

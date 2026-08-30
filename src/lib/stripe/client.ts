@@ -16,7 +16,9 @@ export function getStripe(): Stripe {
     throw new Error("STRIPE_SECRET_KEY is not configured.");
   }
   if (!stripeClient) {
-    stripeClient = new Stripe(secretKey);
+    stripeClient = new Stripe(secretKey, {
+      httpClient: Stripe.createFetchHttpClient(),
+    });
   }
   return stripeClient;
 }

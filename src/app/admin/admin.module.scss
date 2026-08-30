@@ -30,6 +30,17 @@
   font-size: var(--text-small);
 }
 
+.supportText {
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+.textLink {
+  color: var(--color-brand-deep);
+  font-weight: 700;
+}
+
 /* ---- Admin shell ---- */
 .shell {
   min-height: 100vh;
@@ -178,6 +189,18 @@
 
 .main {
   min-width: 0;
+}
+
+.sectionCard {
+  padding: var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .pageHeader {

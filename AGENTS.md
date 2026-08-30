@@ -26,7 +26,7 @@ The numbered requirement set is complete from sections `01` through `20`. Still 
 - SCSS and SCSS Modules
 - Supabase Postgres, Auth, and Storage
 - Stripe, Resend, Twilio, Google Maps, and Cloudflare Turnstile when their phases begin
-- Vercel deployment target
+- Cloudflare Pages deployment target (Edge Runtime — no Node.js APIs in route handlers, layouts, or Server Actions)
 
 ## Next.js rules
 

@@ -1,7 +1,5 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
-
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -119,8 +117,8 @@ export async function savePlacementPhoto(
   }
 
   const extension = params.file.name.split(".").pop()?.toLowerCase() || "bin";
-  const objectPath = `customers/${sanitizePathPart(params.customerId)}/placements/${randomUUID()}.${extension}`;
-  const buffer = Buffer.from(await params.file.arrayBuffer());
+  const objectPath = `customers/${sanitizePathPart(params.customerId)}/placements/${crypto.randomUUID()}.${extension}`;
+  const buffer = await params.file.arrayBuffer();
 
   const upload = await supabase.storage
     .from("customer-photos")
