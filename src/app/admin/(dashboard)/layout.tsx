@@ -4,8 +4,6 @@ import { requireStaff } from "@/lib/auth/staff";
 import styles from "../admin.module.scss";
 import { AdminNav } from "./admin-nav";
 
-export const runtime = "edge";
-
 export default async function AdminDashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

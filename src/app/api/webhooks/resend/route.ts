@@ -3,8 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getResendClient } from "@/lib/resend/client";
 import { getResendConfig } from "@/lib/resend/config";
 
-export const runtime = "edge";
-
 export async function POST(request: NextRequest) {
   const config = getResendConfig();
 

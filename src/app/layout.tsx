@@ -10,8 +10,6 @@ import { getSiteUrl } from "@/lib/site-url";
 
 import "./globals.scss";
 
-export const runtime = "edge";
-
 const anton = Anton({
   variable: "--font-display",
   weight: "400",

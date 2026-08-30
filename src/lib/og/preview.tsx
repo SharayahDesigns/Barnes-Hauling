@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { ImageResponse } from "next/og";
 
 // Shared social-share preview used by both app/opengraph-image and
@@ -12,16 +14,8 @@ export const OG_ALT =
 
 const BRAND_SOFT = "#7e9552";
 
-async function asset(path: string): Promise<ArrayBuffer> {
-  return fetch(new URL(path, import.meta.url)).then((res) => res.arrayBuffer());
-}
-
-// Edge runtime has no Buffer; build the base64 data URI manually via btoa.
-function toDataUri(buffer: ArrayBuffer, mime: string): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return `data:${mime};base64,${btoa(binary)}`;
+async function asset(path: string) {
+  return readFile(new URL(path, import.meta.url));
 }
 
 export async function renderOgPreview(): Promise<ImageResponse> {
@@ -36,9 +30,9 @@ export async function renderOgPreview(): Promise<ImageResponse> {
       asset("./fonts/Barlow-SemiBold.ttf"),
     ]);
 
-  const bgSrc = toDataUri(bg, "image/jpeg");
-  const deerSrc = toDataUri(deer, "image/png");
-  const dumpSrc = toDataUri(dump, "image/png");
+  const bgSrc = `data:image/jpeg;base64,${bg.toString("base64")}`;
+  const deerSrc = `data:image/png;base64,${deer.toString("base64")}`;
+  const dumpSrc = `data:image/png;base64,${dump.toString("base64")}`;
 
   return new ImageResponse(
     (
