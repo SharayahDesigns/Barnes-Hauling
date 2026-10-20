@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 
 import {
   CtaBand,
@@ -104,9 +103,6 @@ export default function AboutPage() {
                 your home, or managing a job site, we help you get the right
                 dumpster and the right team.
               </p>
-              <Link className={styles.outlineButton} href={siteRoutes.services}>
-                Get to Know Us
-              </Link>
             </div>
           </div>
         </div>

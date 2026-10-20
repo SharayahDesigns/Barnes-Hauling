@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
-import { footerNavigation, siteRoutes } from "@/config/site";
+import { footerNavigation } from "@/config/site";
 
 import { Brand } from "./brand";
 import styles from "./site-shell.module.scss";
@@ -20,9 +20,6 @@ export function SiteFooter() {
             Clear paths for hauling estimates and dumpster rental planning,
             with confirmed terms shown before the next step.
           </p>
-          <Link className={styles.footerServiceArea} href={siteRoutes.serviceAreas}>
-            Check the service-area status <span aria-hidden="true">→</span>
-          </Link>
         </div>
 
         <FooterGroup title="Services" links={footerNavigation.services} />

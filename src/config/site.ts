@@ -11,7 +11,6 @@ export const siteRoutes = {
   dumpsterRental: "/services/dumpster-rental",
   dumpster15: "/dumpsters/15-yard",
   dumpster22: "/dumpsters/22-yard",
-  serviceAreas: "/service-areas",
   about: "/about",
   faq: "/faq",
   contact: "/contact",
@@ -39,8 +38,6 @@ export const serviceNavigation = [
 ] as const satisfies readonly SiteNavigationItem[];
 
 export const primaryNavigation = [
-  { label: "Dumpster Rentals", href: siteRoutes.dumpsterRental },
-  { label: "Service Areas", href: "/#service-area" },
   { label: "About", href: siteRoutes.about },
   { label: "FAQ", href: siteRoutes.faq },
   { label: "Contact", href: siteRoutes.contact },
@@ -48,21 +45,16 @@ export const primaryNavigation = [
 
 export const footerNavigation = {
   services: [
-    { label: "Services overview", href: siteRoutes.services },
-    { label: "Junk removal", href: siteRoutes.junkRemoval },
-    { label: "Dumpster rentals", href: siteRoutes.dumpsterRental },
-    { label: "15-yard dumpster", href: siteRoutes.dumpster15 },
-    { label: "22-yard dumpster", href: siteRoutes.dumpster22 },
+    { label: "Services overview", href: "/#dumpster-info" },
   ],
   company: [
-    { label: "Service areas", href: siteRoutes.serviceAreas },
     { label: "About", href: siteRoutes.about },
     { label: "FAQ", href: siteRoutes.faq },
     { label: "Contact", href: siteRoutes.contact },
   ],
   legal: [
-    { label: "Privacy — copy pending", href: siteRoutes.privacy },
-    { label: "Terms — copy pending", href: siteRoutes.terms },
+    { label: "Privacy Policy", href: siteRoutes.privacy },
+    { label: "Terms of Service", href: siteRoutes.terms },
   ],
 } as const satisfies Readonly<
   Record<"services" | "company" | "legal", readonly SiteNavigationItem[]>

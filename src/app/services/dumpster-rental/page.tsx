@@ -28,7 +28,6 @@ export default function DumpsterRentalPage() {
         title="The container starts with what goes inside."
         summary="Compare confirmed 15-yard and 22-yard options, then match the container to residential waste or heavy material. Loading rules are part of choosing correctly."
         primaryAction={{ label: "Plan a dumpster rental", href: siteRoutes.book }}
-        secondaryAction={{ label: "Check service-area status", href: siteRoutes.serviceAreas }}
       />
 
       <section className={styles.section}>

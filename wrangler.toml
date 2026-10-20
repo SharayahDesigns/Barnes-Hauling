@@ -7,6 +7,10 @@ compatibility_flags = ["nodejs_compat"]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "barnes-hauling"
+
 [observability]
 enabled = true
 

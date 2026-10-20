@@ -86,7 +86,6 @@ export default function FifteenYardPage() {
       <CtaBand
         title="Ready to plan the placement and load?"
         text="The booking entry page explains what will be needed, but it does not reserve a container or create a booking yet."
-        secondary={{ label: "Check service-area status", href: siteRoutes.serviceAreas }}
       />
     </>
   );

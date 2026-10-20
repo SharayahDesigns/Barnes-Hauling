@@ -11,6 +11,7 @@ import {
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
 import { ImageStrip } from "@/components/marketing/image-strip";
+import { ScrollReveal } from "@/components/marketing/scroll-reveal";
 import { loadHomepageDumpsters } from "@/lib/home/dumpster-inventory";
 import {
   AlertTriangleIcon,
@@ -86,6 +87,7 @@ export default async function Home() {
         ]}
       />
 
+      <ScrollReveal>
       <section className={styles.surfaceSection} id="dumpster-info">
         <div className={styles.sectionInner}>
           <div className={styles.dumpsterIntro}>
@@ -115,7 +117,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.howSection}>
         <div className={styles.sectionInner}>
           <div className={styles.sectionIntro}>
@@ -176,7 +180,9 @@ export default async function Home() {
           </p>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <ImageStrip
         images={[
           { src: "/images/truckLoad.webp", alt: "Barnes crew loading a hauling truck" },
@@ -187,7 +193,9 @@ export default async function Home() {
           { src: "/images/dumphousemodel.webp", alt: "Roll-off dumpster placed at a home" },
         ]}
       />
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.section}>
         <div className={styles.sectionInner}>
           <div className={styles.haulHeader}>
@@ -318,7 +326,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.svcSection} id="service-area">
         <div className={styles.svcInner}>
           <div className={styles.svcContent}>
@@ -367,12 +377,6 @@ export default async function Home() {
               ))}
             </ul>
             <div className={styles.svcActions}>
-              <Link
-                className={styles.svcPrimaryBtn}
-                href={siteRoutes.serviceAreas}
-              >
-                View full service area <span aria-hidden="true">→</span>
-              </Link>
               <Link className={styles.svcSecondaryBtn} href={siteRoutes.book}>
                 Check availability <span aria-hidden="true">→</span>
               </Link>
@@ -400,7 +404,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.reviews}>
         <div className={styles.sectionInner}>
           <div className={`${styles.sectionIntro} ${styles.sectionIntroCenter}`}>
@@ -506,7 +512,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.whySection}>
         <div className={styles.whyMain}>
           <div className={styles.whyIntro}>
@@ -633,7 +641,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.section}>
         <div className={styles.sectionInner}>
           <div className={`${styles.sectionIntro} ${styles.sectionIntroCenter}`}>
@@ -699,7 +709,9 @@ export default async function Home() {
           </ul>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <section className={styles.surfaceSection}>
         <div className={styles.sectionInner}>
           <SectionIntro
@@ -712,11 +724,14 @@ export default async function Home() {
           </Link>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal>
       <CtaBand
         title="Have a project in mind? Reserve your dumpster."
         text="Book online in a few minutes, or call and we'll set it up for you."
       />
+      </ScrollReveal>
     </>
   );
 }

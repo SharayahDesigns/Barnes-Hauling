@@ -96,7 +96,11 @@ export function PageHero({
             id="page-title"
             className={titleBars ? styles.heroTitleBars : undefined}
           >
-            {title}
+            {titleBars ? (
+              <span className={styles.heroTitleBarsText}>{title}</span>
+            ) : (
+              title
+            )}
           </h1>
           <p className={styles.heroSummary}>{summary}</p>
           {primaryAction || secondaryAction ? (
