@@ -1,5 +1,6 @@
 import { formatCents } from "@/config/public-content";
 import { createPageMetadata } from "@/lib/page-metadata";
+import { denverDate, todayInDenver } from "@/lib/booking/records";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import styles from "../admin.module.scss";
@@ -41,13 +42,31 @@ const BOOKED_REVENUE_STATUSES = new Set([
   "completed",
 ]);
 
-const UPCOMING_DROPOFF_STATUSES = new Set([
-  "pending_review",
-  "pending_payment",
-  "confirmed",
-  "scheduled",
-  "in_progress",
-]);
+// A dropoff is on the schedule only once it's paid for: the booking is
+// confirmed or scheduled (not yet delivered) AND has a successful payment.
+// Pending-payment checkouts, unpaid requests, and refunds never show.
+const UPCOMING_DROPOFF_STATUSES = ["confirmed", "scheduled"] as const;
+const PAID_PAYMENT_STATUSES = ["succeeded", "partially_refunded"] as const;
+
+type UpcomingDropoffRow = {
+  id: string;
+  booking_number: number;
+  status: string;
+  scheduled_start_at: string;
+  scheduled_end_at: string | null;
+  customers: { first_name: string; last_name: string; phone: string | null } | null;
+  customer_addresses: { address_line_1: string; city: string } | null;
+  service_items: { name: string } | null;
+  dumpster_assignments: Array<{
+    status: string;
+    dumpsters: { asset_number: string } | null;
+  }> | null;
+  payments: Array<{
+    status: string;
+    amount_cents: number;
+    is_test_mode: boolean;
+  }>;
+};
 
 function customerName(
   customer: DashboardBookingRow["customers"],
@@ -68,7 +87,9 @@ function latestFinalizedTotalCents(
   return latest?.total_cents ?? 0;
 }
 
-function assignedDumpsterLabel(booking: DashboardBookingRow): string {
+function assignedDumpsterLabel(
+  booking: Pick<DashboardBookingRow, "dumpster_assignments">,
+): string {
   const activeAssignment = booking.dumpster_assignments?.find(
     (assignment) => assignment.status === "reserved" || assignment.status === "assigned",
   );
@@ -114,7 +135,12 @@ export default async function AdminDashboardPage() {
   const month = monthBounds(now);
   const year = yearBounds(now);
 
-  const [leads, bookings, dumpstersTotal, dumpstersAvailable, bookingsDetail] = await Promise.all([
+  // Look back a day, then keep anything delivering today (Denver) or later, so
+  // a 9am dropoff stays on today's list after 9am.
+  const today = todayInDenver();
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const [leads, bookings, dumpstersTotal, dumpstersAvailable, bookingsDetail, upcomingResult] = await Promise.all([
     supabase.from("quotes").select("*", countHead),
     supabase.from("bookings").select("*", countHead),
     supabase.from("dumpsters").select("*", countHead),
@@ -127,7 +153,21 @@ export default async function AdminDashboardPage() {
       .not("scheduled_start_at", "is", null)
       .order("scheduled_start_at", { ascending: true })
       .limit(200),
+    supabase
+      .from("bookings")
+      .select(
+        "id, booking_number, status, scheduled_start_at, scheduled_end_at, customers(first_name, last_name, phone), customer_addresses!bookings_service_address_id_fkey(address_line_1, city), service_items(name), dumpster_assignments(status, dumpsters(asset_number)), payments!inner(status, amount_cents, is_test_mode)",
+      )
+      .in("status", [...UPCOMING_DROPOFF_STATUSES])
+      .in("payments.status", [...PAID_PAYMENT_STATUSES])
+      .gte("scheduled_start_at", since)
+      .order("scheduled_start_at", { ascending: true })
+      .limit(25),
   ]);
+
+  if (upcomingResult.error) {
+    console.error("admin/dashboard: upcoming dropoffs query failed", upcomingResult.error);
+  }
 
   if (bookingsDetail.error) {
     console.error("admin/dashboard: bookings detail query failed", bookingsDetail.error);
@@ -152,14 +192,11 @@ export default async function AdminDashboardPage() {
     )
     .reduce((sum, booking) => sum + latestFinalizedTotalCents(booking.booking_price_snapshots), 0);
 
-  const upcomingDropoffs = detailedBookings
-    .filter(
-      (booking) =>
-        UPCOMING_DROPOFF_STATUSES.has(booking.status) &&
-        booking.scheduled_start_at &&
-        new Date(booking.scheduled_start_at) >= now,
-    )
-    .slice(0, 8);
+  const upcomingDropoffs = (
+    (upcomingResult.data as unknown as UpcomingDropoffRow[] | null) ?? []
+  )
+    .filter((booking) => denverDate(booking.scheduled_start_at) >= today)
+    .slice(0, 10);
 
   const stats = [
     { label: "Quote requests / leads", value: leads.count ?? 0 },
@@ -191,41 +228,74 @@ export default async function AdminDashboardPage() {
       <section className={styles.card}>
         <h2 className={styles.cardTitle}>Upcoming dropoffs</h2>
         <p className={styles.cardSub}>
-          Booked revenue uses finalized booking snapshots on active scheduled jobs until
-          Stripe payment records are live in Supabase.
+          Paid bookings only: confirmed or scheduled, with a successful payment.
+          Unpaid checkouts and requests stay in Leads &amp; bookings.
         </p>
         <div className={styles.tableWrap}>
-          {upcomingDropoffs.length === 0 ? (
-            <p className={styles.empty}>No upcoming dropoffs on the schedule.</p>
+          {upcomingResult.error ? (
+            <p className={styles.error} role="alert">
+              Upcoming dropoffs couldn&apos;t load. Refresh to try again.
+            </p>
+          ) : upcomingDropoffs.length === 0 ? (
+            <p className={styles.empty}>No paid dropoffs coming up.</p>
           ) : (
             <table className={styles.table}>
               <thead>
                 <tr>
                   <th>#</th>
                   <th>Dropoff</th>
+                  <th>Pickup</th>
                   <th>Customer</th>
+                  <th>Address</th>
                   <th>Dumpster</th>
-                  <th>Status</th>
-                  <th>Booked total</th>
+                  <th>Paid</th>
                 </tr>
               </thead>
               <tbody>
-                {upcomingDropoffs.map((booking) => (
-                  <tr key={booking.booking_number}>
-                    <td data-label="Booking">#{booking.booking_number}</td>
-                    <td data-label="Dropoff">{formatDropoffDate(booking.scheduled_start_at as string)}</td>
-                    <td data-label="Customer">{customerName(booking.customers)}</td>
-                    <td data-label="Dumpster">{assignedDumpsterLabel(booking)}</td>
-                    <td data-label="Status">
-                      <span className={styles.statusPill}>
-                        {booking.status.replaceAll("_", " ")}
-                      </span>
-                    </td>
-                    <td data-label="Booked total">
-                      {formatCents(latestFinalizedTotalCents(booking.booking_price_snapshots))}
-                    </td>
-                  </tr>
-                ))}
+                {upcomingDropoffs.map((booking) => {
+                  const paidCents = booking.payments
+                    .filter((payment) =>
+                      (PAID_PAYMENT_STATUSES as readonly string[]).includes(payment.status),
+                    )
+                    .reduce((sum, payment) => sum + payment.amount_cents, 0);
+                  const testMode = booking.payments.some((payment) => payment.is_test_mode);
+                  const isToday = denverDate(booking.scheduled_start_at) === today;
+                  return (
+                    <tr key={booking.id}>
+                      <td data-label="Booking">#{booking.booking_number}</td>
+                      <td data-label="Dropoff">
+                        {isToday ? <strong>Today · </strong> : null}
+                        {formatDropoffDate(booking.scheduled_start_at)}
+                      </td>
+                      <td data-label="Pickup">
+                        {booking.scheduled_end_at ? formatDropoffDate(booking.scheduled_end_at) : "—"}
+                      </td>
+                      <td data-label="Customer">
+                        {customerName(booking.customers)}
+                        {booking.customers?.phone ? (
+                          <div className={styles.cellMeta}>
+                            <a href={`tel:${booking.customers.phone}`}>{booking.customers.phone}</a>
+                          </div>
+                        ) : null}
+                      </td>
+                      <td data-label="Address">
+                        {booking.customer_addresses
+                          ? `${booking.customer_addresses.address_line_1}, ${booking.customer_addresses.city}`
+                          : "—"}
+                      </td>
+                      <td data-label="Dumpster">
+                        {booking.service_items?.name ?? "—"}
+                        <div className={styles.cellMeta}>{assignedDumpsterLabel(booking)}</div>
+                      </td>
+                      <td data-label="Paid">
+                        <span className={`${styles.statusPill} ${styles.statusPillAvailable}`}>
+                          Paid {formatCents(paidCents)}
+                        </span>
+                        {testMode ? <div className={styles.cellMeta}>Stripe test mode</div> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
