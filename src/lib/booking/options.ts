@@ -6,6 +6,14 @@ import { dumpsterRates } from "@/config/public-content";
  */
 export type BookingSizeOption = Readonly<{
   key: string;
+  /** Options sharing this key are the same physical size (one dumpster pool). */
+  sizeGroupKey: string;
+  /** Size name, e.g. "15-Yard Dumpster". */
+  sizeName: string;
+  /** URL slug of the size, e.g. "15-yard" (used by /book?size=15-yard). */
+  sizeSlug: string;
+  /** What distinguishes this option within its size, e.g. "Heavy Materials". */
+  optionLabel: string;
   size: string;
   use: string;
   dimensions: string;
@@ -23,6 +31,10 @@ export type BookingSizeOption = Readonly<{
 export const STATIC_BOOKING_SIZE_OPTIONS: readonly BookingSizeOption[] = dumpsterRates.map(
   (rate) => ({
     key: rate.key,
+    sizeGroupKey: rate.size,
+    sizeName: rate.size,
+    sizeSlug: rate.size,
+    optionLabel: rate.use,
     size: rate.size,
     use: rate.use,
     dimensions: rate.dimensions,
@@ -45,6 +57,34 @@ export function getBookingSizeOption(
     throw new Error(`Unknown dumpster size option: ${key}`);
   }
   return option;
+}
+
+export type BookingPreselection = Readonly<{
+  /** sizeGroupKey of the size to show as chosen. */
+  groupKey: string;
+  /** Option to select, when the link named one or the size has only one. */
+  sizeKey: string | null;
+}>;
+
+/**
+ * Turns /book?size=15-yard[&load=<option code>] into a starting selection,
+ * so a dumpster chosen on the home page or a size page arrives selected.
+ * Unknown or stale values are ignored.
+ */
+export function resolveBookingPreselection(
+  options: readonly BookingSizeOption[],
+  sizeSlug: string | undefined,
+  loadKey: string | undefined,
+): BookingPreselection | null {
+  const byLoad = loadKey ? options.find((option) => option.key === loadKey) : undefined;
+  if (byLoad) return { groupKey: byLoad.sizeGroupKey, sizeKey: byLoad.key };
+  if (!sizeSlug) return null;
+  const inSize = options.filter((option) => option.sizeSlug === sizeSlug);
+  if (inSize.length === 0) return null;
+  return {
+    groupKey: inSize[0].sizeGroupKey,
+    sizeKey: inSize.length === 1 ? inSize[0].key : null,
+  };
 }
 
 export function resolveBookingPrice(

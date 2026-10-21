@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { addDaysIso, rentalPickupDate, rentalWindowConflict } from "@/lib/booking/rental-window";
 import type { UnavailableReason } from "@/lib/booking/types";
 
 import styles from "./booking-flow.module.scss";
@@ -34,19 +35,28 @@ export function DateCalendar({
   minDate,
   maxDate,
   unavailable,
+  rentalDays,
   value,
   onChange,
 }: Readonly<{
   minDate: string;
   maxDate: string;
   unavailable: readonly UnavailableReason[];
+  /** Length of the rental; the calendar shows delivery through pickup. */
+  rentalDays: number;
   value: string;
   onChange: (date: string) => void;
 }>) {
-  const reasonByDate = useMemo(
-    () => new Map(unavailable.map((entry) => [entry.date, entry])),
-    [unavailable],
-  );
+  // A day can be a start date only if the whole rental fits from it.
+  const reasonByDate = useMemo(() => {
+    const reasons = new Map<string, UnavailableReason>();
+    for (let date = minDate; date <= maxDate; date = addDaysIso(date, 1)) {
+      const reason = rentalWindowConflict(unavailable, date, rentalDays);
+      if (reason) reasons.set(date, reason);
+    }
+    return reasons;
+  }, [unavailable, rentalDays, minDate, maxDate]);
+  const pickupDate = value ? rentalPickupDate(value, rentalDays) : null;
   const [notice, setNotice] = useState<string | null>(null);
 
   const [minY, minM] = minDate.split("-").map(Number);
@@ -116,9 +126,12 @@ export function DateCalendar({
           if (!date) return <span key={`blank-${index}`} />;
           const day = Number(date.slice(-2));
           const outOfRange = date < minDate || date > maxDate;
-          const reason = reasonByDate.get(date);
-          const isUnavailable = Boolean(reason);
           const selected = date === value;
+          const inRental = Boolean(pickupDate && date > value && date < pickupDate);
+          const isPickup = date === pickupDate;
+          const partOfRental = selected || inRental || isPickup;
+          const reason = reasonByDate.get(date) ?? null;
+          const isUnavailable = Boolean(reason) && !partOfRental;
           const available = !outOfRange && !isUnavailable;
           return (
             <button
@@ -128,7 +141,9 @@ export function DateCalendar({
                 styles.calDay,
                 outOfRange ? styles.calDayMuted : "",
                 isUnavailable && !outOfRange ? styles.calDayUnavailable : "",
-                available && !selected ? styles.calDayAvailable : "",
+                available && !partOfRental ? styles.calDayAvailable : "",
+                inRental ? styles.calDayInRental : "",
+                isPickup ? styles.calDayPickup : "",
                 selected ? styles.calDaySelected : "",
               ]
                 .filter(Boolean)
@@ -137,7 +152,17 @@ export function DateCalendar({
               // we can explain why they can't be booked.
               disabled={outOfRange}
               aria-pressed={selected}
-              aria-label={reason ? `${date} — ${reason.message}` : date}
+              aria-label={
+                selected
+                  ? `${date}, delivery day`
+                  : isPickup
+                    ? `${date}, pickup day`
+                    : inRental
+                      ? `${date}, rental day`
+                      : reason
+                        ? `${date} — ${reason.message}`
+                        : date
+              }
               onClick={() => {
                 if (reason) {
                   setNotice(reason.message);
@@ -160,6 +185,19 @@ export function DateCalendar({
         <span>
           <span className={`${styles.calSwatch} ${styles.calSwatchOff}`} /> Unavailable
         </span>
+        {value ? (
+          <>
+            <span>
+              <span className={`${styles.calSwatch} ${styles.calSwatchStart}`} /> Delivery
+            </span>
+            <span>
+              <span className={`${styles.calSwatch} ${styles.calSwatchRental}`} /> Rental
+            </span>
+            <span>
+              <span className={`${styles.calSwatch} ${styles.calSwatchPickup}`} /> Pickup
+            </span>
+          </>
+        ) : null}
       </div>
 
       <p className={styles.calNotice} role="status" aria-live="polite">

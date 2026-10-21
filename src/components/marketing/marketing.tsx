@@ -328,8 +328,11 @@ export function FaqList({
 
 type InventoryDumpster = {
   id: string;
+  code?: string;
+  sizeSlug?: string | null;
   sizeName: string;
   packageLabel?: string | null;
+  description?: string | null;
   dimensions: string;
   priceCents: number | null;
   maxWeightTons: number | null;
@@ -376,6 +379,9 @@ export function InventoryDumpsterCard({
         </span>
         <span className={styles.priceCardSize}>{dumpster.sizeName}</span>
       </div>
+      {dumpster.description ? (
+        <p className={styles.priceCardUse}>{dumpster.description}</p>
+      ) : null}
       <div className={styles.priceCardHead}>
         <h3>
           {dumpster.priceCents != null
@@ -449,7 +455,17 @@ export function InventoryDumpsterCard({
         </div>
       ) : null}
       <div className={styles.priceCardActions}>
-        <Link className={styles.priceCardButton} href={siteRoutes.book}>
+        <Link
+          className={styles.priceCardButton}
+          href={
+            dumpster.code
+              ? `${siteRoutes.book}?${new URLSearchParams({
+                  ...(dumpster.sizeSlug ? { size: dumpster.sizeSlug } : {}),
+                  load: dumpster.code,
+                }).toString()}`
+              : siteRoutes.book
+          }
+        >
           Book Online
         </Link>
         {isConfirmedBusinessFact(phone) ? (
@@ -462,6 +478,159 @@ export function InventoryDumpsterCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+type SizeGroupCardData = {
+  sizeName: string;
+  sizeSlug: string | null;
+  dimensions: string;
+  imageUrl: string | null;
+  fromPriceCents: number | null;
+  rentalDays: readonly number[];
+  options: ReadonlyArray<{
+    id: string;
+    packageLabel?: string | null;
+    priceCents: number | null;
+    maxWeightTons: number | null;
+  }>;
+};
+
+/**
+ * One card per dumpster size, priced "from" its cheapest option, with each
+ * option's price listed so the starting price is never mistaken for the
+ * price of every load. Customers pick the option ("what's going in it?")
+ * during booking.
+ */
+export function SizeGroupCard({ group }: Readonly<{ group: SizeGroupCardData }>) {
+  const phone = businessConfig.contact.phone;
+  const multiple = group.options.length > 1;
+
+  return (
+    <article className={styles.priceCard}>
+      <div className={styles.priceCardTop}>
+        <span className={styles.priceCardIdentity}>
+          <span className={styles.priceCardIcon} aria-hidden="true">
+            <HouseIcon />
+          </span>
+          <span className={styles.priceCardPackage}>{group.sizeName}</span>
+        </span>
+      </div>
+      <div className={styles.priceCardHead}>
+        <h3>
+          {group.fromPriceCents != null ? (
+            <>
+              {multiple ? <span className={styles.priceFrom}>From </span> : null}
+              {formatCents(group.fromPriceCents)}
+            </>
+          ) : (
+            "Contact for rate"
+          )}
+        </h3>
+        {group.imageUrl ? (
+          <div className={styles.priceCardThumb}>
+            {/* Supabase Storage public URL — plain img avoids remote-loader config. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={group.imageUrl} alt="" className={styles.priceCardThumbImg} />
+          </div>
+        ) : null}
+      </div>
+      {group.dimensions ? <p className={styles.dimensions}>{group.dimensions}</p> : null}
+      {group.rentalDays.length > 0 ? (
+        <dl className={styles.rateFacts}>
+          <div>
+            <span className={styles.rateFactIcon} aria-hidden="true">
+              <CalendarIcon />
+            </span>
+            <dt>Rental</dt>
+            <dd>{group.rentalDays.join(" or ")} days</dd>
+          </div>
+        </dl>
+      ) : null}
+      <div className={styles.sizeOptionList}>
+        <p className={styles.sizeOptionListTitle}>
+          {multiple ? "Price depends on what's going in it" : "What's included"}
+        </p>
+        <ul>
+          {group.options.map((option) => (
+            <li key={option.id}>
+              <span className={styles.sizeOptionName}>
+                {option.packageLabel ?? group.sizeName}
+                {option.maxWeightTons != null ? (
+                  <span className={styles.sizeOptionMeta}>
+                    {" "}
+                    · {option.maxWeightTons} tons included
+                  </span>
+                ) : null}
+              </span>
+              <span className={styles.sizeOptionPrice}>
+                {option.priceCents != null ? formatCents(option.priceCents) : "Quote"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className={styles.priceCardActions}>
+        <Link
+          className={styles.priceCardButton}
+          href={
+            group.sizeSlug
+              ? `${siteRoutes.book}?size=${encodeURIComponent(group.sizeSlug)}`
+              : siteRoutes.book
+          }
+          aria-label={`Book a ${group.sizeName} online`}
+        >
+          Book Online
+        </Link>
+        {group.sizeSlug ? (
+          <Link
+            className={`${styles.priceCardButton} ${styles.priceCardButtonDark}`}
+            href={`/dumpsters/${group.sizeSlug}`}
+            aria-label={`${group.sizeName} details and what can go in it`}
+          >
+            Details &amp; materials
+          </Link>
+        ) : isConfirmedBusinessFact(phone) ? (
+          <a
+            className={`${styles.priceCardButton} ${styles.priceCardButtonDark}`}
+            href={`tel:${phone.value}`}
+          >
+            Call To Book
+          </a>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+/**
+ * Shown wherever live prices would appear but none could be loaded (database
+ * unreachable, or nothing bookable yet). Never falls back to typed-in prices,
+ * which can drift from what the owner set in the admin.
+ */
+export function PricingUnavailable({
+  title = "Call for current pricing",
+  text = "Our live rates aren't loading right now. Call and we'll quote your rental, or check back in a few minutes.",
+}: Readonly<{ title?: string; text?: string }>) {
+  const phone = businessConfig.contact.phone;
+  return (
+    <div className={styles.callout} role="status">
+      <h3>{title}</h3>
+      <p>{text}</p>
+      <div className={styles.priceCardActions}>
+        {isConfirmedBusinessFact(phone) ? (
+          <a
+            className={`${styles.priceCardButton} ${styles.priceCardButtonDark}`}
+            href={`tel:${phone.value}`}
+          >
+            Call {phone.value}
+          </a>
+        ) : null}
+        <Link className={styles.priceCardButton} href={siteRoutes.book}>
+          Book Online
+        </Link>
+      </div>
+    </div>
   );
 }
 

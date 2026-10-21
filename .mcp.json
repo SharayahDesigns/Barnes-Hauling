@@ -2,10 +2,17 @@
   "mcpServers": {
     "stripe": {
       "command": "npx",
-      "args": ["-y", "@stripe/mcp@0.3.3"],
+      "args": [
+        "-y",
+        "@stripe/mcp@0.3.3"
+      ],
       "env": {
         "STRIPE_SECRET_KEY": "${STRIPE_MCP_RESTRICTED_KEY}"
       }
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=dgxkkfrrfgxzgklqegxo&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
     }
   }
 }

@@ -1,55 +1,62 @@
 import {
   Callout,
   CtaBand,
-  DumpsterCard,
   PageHero,
+  PricingUnavailable,
   SectionIntro,
+  SizeGroupCard,
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
-import {
-  dumpsterFees,
-  dumpsterRates,
-  formatCents,
-} from "@/config/public-content";
+import { dumpsterFees, formatCents } from "@/config/public-content";
 import { siteRoutes } from "@/config/site";
+import { groupDumpstersBySize, loadHomepageDumpsters } from "@/lib/home/dumpster-inventory";
 import { createPageMetadata } from "@/lib/page-metadata";
+
+// Prices come from the live catalog; refresh at most once a minute.
+export const revalidate = 60;
 
 export const metadata = createPageMetadata(
   "Dumpster rentals",
-  "Compare confirmed Barnes 15-yard and 22-yard dumpster rental information, material restrictions, included weight, and conditional-fee notices.",
+  "Compare Barnes dumpster rental options: current prices, sizes, rental lengths, included weight, and what can go in each.",
   siteRoutes.dumpsterRental,
 );
 
-export default function DumpsterRentalPage() {
+export default async function DumpsterRentalPage() {
+  const sizeGroups = groupDumpstersBySize(await loadHomepageDumpsters());
+
   return (
     <>
       <PageHero
         eyebrow="Dumpster rentals"
         title="The container starts with what goes inside."
-        summary="Compare confirmed 15-yard and 22-yard options, then match the container to residential waste or heavy material. Loading rules are part of choosing correctly."
+        summary="Compare every size and option, then match the dumpster to what you're throwing away. Loading rules are part of choosing correctly."
         primaryAction={{ label: "Plan a dumpster rental", href: siteRoutes.book }}
       />
 
       <section className={styles.section}>
         <div className={styles.sectionInner}>
           <SectionIntro
-            eyebrow="Rate-sheet options"
-            title="Three material-and-size combinations."
-            text="Residential rates now reflect the approved July 23, 2026 pricing model. Heavy-material rentals remain staff-approved because included weight and final pricing depend on the approved material."
+            eyebrow="Current options"
+            title="Pick the size and the load."
+            text="Each size shows its starting price and the price for each kind of load. Open a size for the full list of what can and can't go in it."
           />
-          <div className={styles.priceGrid}>
-            {dumpsterRates.map((rate) => (
-              <DumpsterCard key={rate.key} rate={rate} />
-            ))}
-          </div>
+          {sizeGroups.length > 0 ? (
+            <div className={styles.priceGrid}>
+              {sizeGroups.map((group) => (
+                <SizeGroupCard key={group.key} group={group} />
+              ))}
+            </div>
+          ) : (
+            <PricingUnavailable />
+          )}
         </div>
       </section>
 
       <section className={styles.surfaceSection}>
         <div className={styles.sectionInner}>
           <SectionIntro
-            eyebrow="Known additions"
-            title="Weight and specialty-item rates are confirmed."
+            eyebrow="Extra charges"
+            title="Possible extra charges."
           />
           <div className={styles.feeGrid}>
             <article className={styles.feeCard}>
@@ -67,12 +74,12 @@ export default function DumpsterRentalPage() {
               </p>
             </article>
             <article className={styles.feeCard}>
-              <h3>Duration and mileage</h3>
+              <h3>Delivery distance</h3>
               <p>
-                15-yard residential rentals are {formatCents(25000)} for 48 hours
-                or {formatCents(27500)} for 5 days. Delivery includes the first
-                20 driving miles, then adds {formatCents(dumpsterFees.excessMileage.amountCents)}
-                {" "}per excess mile.
+                Delivery includes the first 20 driving miles, then adds
+                {" "}{formatCents(dumpsterFees.excessMileage.amountCents)} per
+                excess mile. Rental lengths and prices are shown on each option
+                above.
               </p>
             </article>
           </div>
@@ -85,10 +92,9 @@ export default function DumpsterRentalPage() {
             <div className={styles.prose}>
               <h2>Important restrictions</h2>
               <p>
-                Residential-waste containers must not be loaded with the heavy
-                materials named on the rate sheet. The 15-yard heavy-material
-                option is limited to dirt, sod, concrete, and gravel and must
-                not contain residential household trash.
+                Each option lists what can and can&apos;t go in it. Load only
+                what your option allows, and don&apos;t mix heavy materials like
+                dirt or concrete with household trash.
               </p>
               <p>
                 <strong>Hazardous materials are prohibited in all dumpsters.</strong>
@@ -110,8 +116,7 @@ export default function DumpsterRentalPage() {
       <CtaBand
         title="Know the load before choosing the size."
         text="Review the upcoming booking process and the information needed to confirm service area, placement, material type, and final pricing."
-        primary={{ label: "Review 15-yard options", href: siteRoutes.dumpster15 }}
-        secondary={{ label: "Review 22-yard option", href: siteRoutes.dumpster22 }}
+        primary={{ label: "Book a Dumpster", href: siteRoutes.book }}
       />
     </>
   );

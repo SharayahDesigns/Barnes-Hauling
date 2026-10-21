@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth/staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { DUMPSTER_STATUSES } from "./dumpster-status";
+import { isAssignmentActive, MANUAL_DUMPSTER_STATUSES } from "./dumpster-status";
 
 const DUMPSTER_IMAGE_BUCKET = "dumpster-images";
 
@@ -17,44 +17,6 @@ function optionalText(max: number) {
     .max(max)
     .optional()
     .transform((v) => (v ? v : undefined));
-}
-
-function optionalPriceDollars() {
-  return z
-    .string()
-    .trim()
-    .optional()
-    .transform((value, ctx) => {
-      if (!value) return undefined;
-      const amount = Number(value);
-      if (!Number.isFinite(amount) || amount < 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Enter a valid non-negative price.",
-        });
-        return z.NEVER;
-      }
-      return Math.round(amount * 100);
-    });
-}
-
-function optionalWeightTons() {
-  return z
-    .string()
-    .trim()
-    .optional()
-    .transform((value, ctx) => {
-      if (!value) return undefined;
-      const amount = Number(value);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Enter a valid weight in tons.",
-        });
-        return z.NEVER;
-      }
-      return amount;
-    });
 }
 
 function optionalDimensionFeet(label: string) {
@@ -73,44 +35,6 @@ function optionalDimensionFeet(label: string) {
         return z.NEVER;
       }
       return amount;
-    });
-}
-
-function optionalMaterialsAllowed() {
-  return z
-    .string()
-    .trim()
-    .optional()
-    .transform((value) => {
-      if (!value) return [];
-      return value
-        .split(/\r?\n|,/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-    });
-}
-
-function rentalDurationDaysField() {
-  return z
-    .union([z.string(), z.array(z.string())])
-    .transform((value, ctx) => {
-      const rawValues = Array.isArray(value) ? value : [value];
-      const parsed = [
-        ...new Set(
-          rawValues
-            .map((item) => Number(item))
-            .filter((item) => Number.isInteger(item) && item > 0),
-        ),
-      ]
-        .sort((a, b) => a - b);
-      if (parsed.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Choose at least one rental duration option.",
-        });
-        return z.NEVER;
-      }
-      return parsed;
     });
 }
 
@@ -142,46 +66,28 @@ function uploadedImageFile() {
 const createSchema = z.object({
   assetNumber: z.string().trim().min(1, "Asset number is required.").max(50),
   dumpsterSizeId: z.string().uuid("Choose a dumpster size."),
-  serviceItemId: z.string().uuid("Choose the booking package for this dumpster."),
-  status: z.enum(DUMPSTER_STATUSES),
+  status: z
+    .string()
+    .refine(
+      (value) => (MANUAL_DUMPSTER_STATUSES as readonly string[]).includes(value),
+      "Choose a valid status.",
+    ),
   currentLocation: optionalText(200),
   conditionNotes: optionalText(500),
-  priceDollars: optionalPriceDollars(),
-  maxWeightTons: optionalWeightTons(),
-  materialsAllowed: optionalMaterialsAllowed(),
-  materialsNotAllowed: optionalMaterialsAllowed(),
-  rentalDurationDays: rentalDurationDaysField(),
   imageFile: uploadedImageFile(),
 });
 
 const updateDetailsSchema = z.object({
   id: z.string().uuid("Missing dumpster id."),
   dumpsterSizeId: z.string().uuid("Missing dumpster size."),
-  serviceItemId: z.string().uuid("Missing booking package."),
   conditionNotes: optionalText(500),
-  priceDollars: optionalPriceDollars(),
-  maxWeightTons: optionalWeightTons(),
   lengthFeet: optionalDimensionFeet("length"),
   widthFeet: optionalDimensionFeet("width"),
   wallHeightFeet: optionalDimensionFeet("wall height"),
-  materialsAllowed: optionalMaterialsAllowed(),
-  materialsNotAllowed: optionalMaterialsAllowed(),
-  rentalDurationDays: rentalDurationDaysField(),
   imageFile: uploadedImageFile(),
 });
 
 export type InventoryFormState = { error?: string; success?: string };
-
-async function syncServiceItemImagePath(
-  supabase: ReturnType<typeof createAdminClient>,
-  serviceItemId: string,
-  imagePath: string | null,
-): Promise<void> {
-  await supabase
-    .from("service_items")
-    .update({ image_path: imagePath })
-    .eq("id", serviceItemId);
-}
 
 function sanitizeAssetNumber(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
@@ -217,15 +123,9 @@ export async function createDumpster(
   const parsed = createSchema.safeParse({
     assetNumber: formData.get("assetNumber"),
     dumpsterSizeId: formData.get("dumpsterSizeId"),
-    serviceItemId: formData.get("serviceItemId"),
     status: formData.get("status"),
     currentLocation: formData.get("currentLocation") ?? undefined,
     conditionNotes: formData.get("conditionNotes") ?? undefined,
-    priceDollars: formData.get("priceDollars") ?? undefined,
-    maxWeightTons: formData.get("maxWeightTons") ?? undefined,
-    materialsAllowed: formData.get("materialsAllowed") ?? undefined,
-    materialsNotAllowed: formData.get("materialsNotAllowed") ?? undefined,
-    rentalDurationDays: formData.getAll("rentalDurationDays"),
     imageFile: formData.get("imageFile") ?? undefined,
   });
   if (!parsed.success) {
@@ -233,12 +133,6 @@ export async function createDumpster(
   }
 
   const supabase = createAdminClient();
-  const supportsServiceItemAssignments = !(
-    await supabase
-      .from("dumpsters")
-      .select("service_item_id")
-      .limit(1)
-  ).error;
   let imagePath: string | null = null;
   if (parsed.data.imageFile) {
     const upload = await uploadDumpsterImage(
@@ -252,24 +146,14 @@ export async function createDumpster(
     imagePath = upload.path ?? null;
   }
 
-  const insertPayload = {
+  const { error } = await supabase.from("dumpsters").insert({
     asset_number: parsed.data.assetNumber,
     dumpster_size_id: parsed.data.dumpsterSizeId,
     status: parsed.data.status,
     current_location: parsed.data.currentLocation ?? null,
     condition_notes: parsed.data.conditionNotes ?? null,
     image_path: imagePath,
-    rental_price_cents: parsed.data.priceDollars ?? null,
-    max_weight_tons: parsed.data.maxWeightTons ?? null,
-    materials_allowed: parsed.data.materialsAllowed,
-    materials_not_allowed: parsed.data.materialsNotAllowed,
-    rental_duration_days: parsed.data.rentalDurationDays,
-    ...(supportsServiceItemAssignments
-      ? { service_item_id: parsed.data.serviceItemId }
-      : {}),
-  };
-
-  const { error } = await supabase.from("dumpsters").insert(insertPayload);
+  });
 
   if (error) {
     if (error.code === "23505") {
@@ -278,20 +162,8 @@ export async function createDumpster(
     return { error: "Could not add the dumpster. Please retry." };
   }
 
-  if (imagePath) {
-    await syncServiceItemImagePath(
-      supabase,
-      parsed.data.serviceItemId,
-      imagePath,
-    );
-  }
-
   revalidatePath("/admin/inventory");
-  return {
-    success: supportsServiceItemAssignments
-      ? `Dumpster ${parsed.data.assetNumber} added.`
-      : `Dumpster ${parsed.data.assetNumber} added. Booking package assignment will save after the service_item_id migration is applied.`,
-  };
+  return { success: `Dumpster ${parsed.data.assetNumber} added.` };
 }
 
 export async function updateDumpsterDetails(
@@ -303,16 +175,10 @@ export async function updateDumpsterDetails(
   const parsed = updateDetailsSchema.safeParse({
     id: formData.get("id"),
     dumpsterSizeId: formData.get("dumpsterSizeId"),
-    serviceItemId: formData.get("serviceItemId"),
     conditionNotes: formData.get("conditionNotes") ?? undefined,
-    priceDollars: formData.get("priceDollars") ?? undefined,
-    maxWeightTons: formData.get("maxWeightTons") ?? undefined,
     lengthFeet: formData.get("lengthFeet") ?? undefined,
     widthFeet: formData.get("widthFeet") ?? undefined,
     wallHeightFeet: formData.get("wallHeightFeet") ?? undefined,
-    materialsAllowed: formData.get("materialsAllowed") ?? undefined,
-    materialsNotAllowed: formData.get("materialsNotAllowed") ?? undefined,
-    rentalDurationDays: formData.getAll("rentalDurationDays"),
     imageFile: formData.get("imageFile") ?? undefined,
   });
   if (!parsed.success) {
@@ -320,19 +186,11 @@ export async function updateDumpsterDetails(
   }
 
   const supabase = createAdminClient();
-  const existingWithAssignmentResult = await supabase
+  const existingResult = await supabase
     .from("dumpsters")
-    .select("asset_number, image_path, service_item_id")
+    .select("asset_number, image_path")
     .eq("id", parsed.data.id)
     .single();
-  const supportsServiceItemAssignments = !existingWithAssignmentResult.error;
-  const existingResult = supportsServiceItemAssignments
-    ? existingWithAssignmentResult
-    : await supabase
-        .from("dumpsters")
-        .select("asset_number, image_path")
-        .eq("id", parsed.data.id)
-        .single();
   if (existingResult.error || !existingResult.data) {
     return { error: "Could not find that dumpster." };
   }
@@ -350,22 +208,12 @@ export async function updateDumpsterDetails(
     imagePath = upload.path ?? imagePath;
   }
 
-  const updatePayload = {
-    condition_notes: parsed.data.conditionNotes ?? null,
-    image_path: imagePath,
-    rental_price_cents: parsed.data.priceDollars ?? null,
-    max_weight_tons: parsed.data.maxWeightTons ?? null,
-    materials_allowed: parsed.data.materialsAllowed,
-    materials_not_allowed: parsed.data.materialsNotAllowed,
-    rental_duration_days: parsed.data.rentalDurationDays,
-    ...(supportsServiceItemAssignments
-      ? { service_item_id: parsed.data.serviceItemId }
-      : {}),
-  };
-
   const { error } = await supabase
     .from("dumpsters")
-    .update(updatePayload)
+    .update({
+      condition_notes: parsed.data.conditionNotes ?? null,
+      image_path: imagePath,
+    })
     .eq("id", parsed.data.id);
 
   if (error) {
@@ -384,14 +232,6 @@ export async function updateDumpsterDetails(
     return { error: "Dumpster details saved, but the size dimensions could not be updated." };
   }
 
-  if (parsed.data.imageFile) {
-    await syncServiceItemImagePath(
-      supabase,
-      parsed.data.serviceItemId,
-      imagePath,
-    );
-  }
-
   if (parsed.data.imageFile && existingResult.data.image_path) {
     await supabase.storage
       .from(DUMPSTER_IMAGE_BUCKET)
@@ -399,11 +239,7 @@ export async function updateDumpsterDetails(
   }
 
   revalidatePath("/admin/inventory");
-  return {
-    success: supportsServiceItemAssignments
-      ? "Dumpster details updated."
-      : "Dumpster details updated. Booking package changes will save after the service_item_id migration is applied.",
-  };
+  return { success: "Dumpster details updated." };
 }
 
 export async function updateDumpsterStatus(
@@ -414,21 +250,21 @@ export async function updateDumpsterStatus(
 
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
-  if (!id || !(DUMPSTER_STATUSES as readonly string[]).includes(status)) {
+  if (!id || !(MANUAL_DUMPSTER_STATUSES as readonly string[]).includes(status)) {
     return { error: "Invalid status." };
   }
 
   const supabase = createAdminClient();
 
-  // Active assignments are the source of truth for availability: a container
-  // that is still reserved or assigned cannot be marked available. This mirrors
-  // the database trigger (guard_dumpster_availability) for a friendly message.
+  // A container whose booking window is still open cannot be marked available.
+  // Assignments whose rental has already ended don't count.
   if (status === "available") {
     const { data: active, error: checkError } = await supabase
       .from("dumpster_assignments")
       .select("id")
       .eq("dumpster_id", id)
       .in("status", ["reserved", "assigned"])
+      .gt("ends_at", new Date().toISOString())
       .limit(1);
     if (checkError) {
       return { error: "Could not verify assignments. Please retry." };
@@ -436,7 +272,7 @@ export async function updateDumpsterStatus(
     if (active && active.length > 0) {
       return {
         error:
-          "This dumpster has an active assignment and can't be marked available. Release the assignment first.",
+          "This dumpster is booked for a rental that hasn't ended yet, so it can't be marked available.",
       };
     }
   }
@@ -479,7 +315,7 @@ export async function deleteDumpster(formData: FormData): Promise<void> {
   const [assignmentsResult, historyResult] = await Promise.all([
     supabase
       .from("dumpster_assignments")
-      .select("id, status")
+      .select("id, status, ends_at")
       .eq("dumpster_id", id),
     supabase
       .from("dumpster_status_history")
@@ -492,9 +328,10 @@ export async function deleteDumpster(formData: FormData): Promise<void> {
   }
 
   const assignments =
-    (assignmentsResult.data as Array<{ id: string; status: string }> | null) ?? [];
-  const activeAssignmentCount = assignments.filter(
-    (assignment) => assignment.status === "reserved" || assignment.status === "assigned",
+    (assignmentsResult.data as Array<{ id: string; status: string; ends_at: string }> | null) ??
+    [];
+  const activeAssignmentCount = assignments.filter((assignment) =>
+    isAssignmentActive(assignment),
   ).length;
   const historyIds =
     ((historyResult.data as Array<{ id: string }> | null) ?? []).map((row) => row.id) ?? [];

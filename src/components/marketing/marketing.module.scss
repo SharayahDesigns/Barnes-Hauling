@@ -3250,3 +3250,66 @@
     width: 100%;
   }
 }
+
+/* ---- Size card: one per dumpster size, priced "from" its cheapest option ---- */
+.priceFrom {
+  font-size: 0.55em;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+  vertical-align: middle;
+}
+
+.sizeOptionList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.sizeOptionListTitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sizeOptionList ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sizeOptionList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px dashed var(--color-border);
+  font-size: 0.95rem;
+}
+
+.sizeOptionList li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sizeOptionName {
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.sizeOptionMeta {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.sizeOptionPrice {
+  flex-shrink: 0;
+  color: var(--color-ink);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}

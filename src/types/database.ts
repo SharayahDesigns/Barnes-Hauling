@@ -741,14 +741,8 @@ export type Database = {
           id: string
           image_path: string | null
           last_inspected_at: string | null
-          materials_allowed: string[]
-          materials_not_allowed: string[]
-          max_weight_tons: number | null
           maintenance_notes: string | null
           purchase_date: string | null
-          rental_duration_days: number[]
-          rental_price_cents: number | null
-          service_item_id: string | null
           status: Database["public"]["Enums"]["dumpster_status"]
           updated_at: string
         }
@@ -762,14 +756,8 @@ export type Database = {
           id?: string
           image_path?: string | null
           last_inspected_at?: string | null
-          materials_allowed?: string[]
-          materials_not_allowed?: string[]
-          max_weight_tons?: number | null
           maintenance_notes?: string | null
           purchase_date?: string | null
-          rental_duration_days?: number[]
-          rental_price_cents?: number | null
-          service_item_id?: string | null
           status?: Database["public"]["Enums"]["dumpster_status"]
           updated_at?: string
         }
@@ -783,14 +771,8 @@ export type Database = {
           id?: string
           image_path?: string | null
           last_inspected_at?: string | null
-          materials_allowed?: string[]
-          materials_not_allowed?: string[]
-          max_weight_tons?: number | null
           maintenance_notes?: string | null
           purchase_date?: string | null
-          rental_duration_days?: number[]
-          rental_price_cents?: number | null
-          service_item_id?: string | null
           status?: Database["public"]["Enums"]["dumpster_status"]
           updated_at?: string
         }
@@ -800,13 +782,6 @@ export type Database = {
             columns: ["dumpster_size_id"]
             isOneToOne: false
             referencedRelation: "dumpster_sizes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "dumpsters_service_item_id_fkey"
-            columns: ["service_item_id"]
-            isOneToOne: false
-            referencedRelation: "service_items"
             referencedColumns: ["id"]
           },
         ]
@@ -957,6 +932,81 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "notification_consents_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_cents: number
+          booking_id: string
+          card_on_file: boolean
+          created_at: string
+          currency_code: string
+          customer_id: string
+          id: string
+          is_test_mode: boolean
+          metadata: Json
+          overage_authorized: boolean
+          provider: string
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_payment_method_id: string | null
+          succeeded_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          booking_id: string
+          card_on_file?: boolean
+          created_at?: string
+          currency_code?: string
+          customer_id: string
+          id?: string
+          is_test_mode?: boolean
+          metadata?: Json
+          overage_authorized?: boolean
+          provider?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
+          succeeded_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          booking_id?: string
+          card_on_file?: boolean
+          created_at?: string
+          currency_code?: string
+          customer_id?: string
+          id?: string
+          is_test_mode?: boolean
+          metadata?: Json
+          overage_authorized?: boolean
+          provider?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_payment_method_id?: string | null
+          succeeded_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
@@ -1507,10 +1557,16 @@ export type Database = {
           default_rental_days: number | null
           description: string | null
           dumpster_size_id: string | null
-          image_path: string | null
           id: string
+          image_path: string | null
           item_kind: Database["public"]["Enums"]["service_item_kind"]
+          materials_allowed: string[]
+          materials_not_allowed: string[]
+          max_weight_tons: number | null
           name: string
+          photo_dumpster_id: string | null
+          rental_duration_days: number[]
+          rental_price_cents: number | null
           service_id: string
           sort_order: number
           status: Database["public"]["Enums"]["catalog_status"]
@@ -1522,10 +1578,16 @@ export type Database = {
           default_rental_days?: number | null
           description?: string | null
           dumpster_size_id?: string | null
-          image_path?: string | null
           id?: string
+          image_path?: string | null
           item_kind: Database["public"]["Enums"]["service_item_kind"]
+          materials_allowed?: string[]
+          materials_not_allowed?: string[]
+          max_weight_tons?: number | null
           name: string
+          photo_dumpster_id?: string | null
+          rental_duration_days?: number[]
+          rental_price_cents?: number | null
           service_id: string
           sort_order?: number
           status?: Database["public"]["Enums"]["catalog_status"]
@@ -1537,10 +1599,16 @@ export type Database = {
           default_rental_days?: number | null
           description?: string | null
           dumpster_size_id?: string | null
-          image_path?: string | null
           id?: string
+          image_path?: string | null
           item_kind?: Database["public"]["Enums"]["service_item_kind"]
+          materials_allowed?: string[]
+          materials_not_allowed?: string[]
+          max_weight_tons?: number | null
           name?: string
+          photo_dumpster_id?: string | null
+          rental_duration_days?: number[]
+          rental_price_cents?: number | null
           service_id?: string
           sort_order?: number
           status?: Database["public"]["Enums"]["catalog_status"]
@@ -1552,6 +1620,13 @@ export type Database = {
             columns: ["dumpster_size_id"]
             isOneToOne: false
             referencedRelation: "dumpster_sizes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_items_photo_dumpster_id_fkey"
+            columns: ["photo_dumpster_id"]
+            isOneToOne: false
+            referencedRelation: "dumpsters"
             referencedColumns: ["id"]
           },
           {
@@ -1666,12 +1741,43 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_webhook_events: {
+        Row: {
+          id: string
+          payload: Json
+          processed_at: string | null
+          received_at: string
+          type: string
+        }
+        Insert: {
+          id: string
+          payload: Json
+          processed_at?: string | null
+          received_at?: string
+          type: string
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          received_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      bootstrap_first_owner: {
+        Args: { target_user_id: string }
+        Returns: undefined
+      }
+      current_staff_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["staff_role"]
+      }
     }
     Enums: {
       address_validation_status:
@@ -1731,6 +1837,15 @@ export type Database = {
         | "other"
       file_validation_status: "pending" | "validated" | "rejected"
       file_visibility: "customer" | "staff_only"
+      payment_status:
+        | "requires_payment"
+        | "processing"
+        | "requires_action"
+        | "succeeded"
+        | "canceled"
+        | "failed"
+        | "refunded"
+        | "partially_refunded"
       price_snapshot_type: "fixed_amount" | "estimated_range" | "quote_required"
       pricing_rounding_mode:
         | "not_applicable"
@@ -1793,12 +1908,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1822,11 +1937,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1847,11 +1962,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1872,11 +1987,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1889,11 +2004,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1967,6 +2082,16 @@ export const Constants = {
       ],
       file_validation_status: ["pending", "validated", "rejected"],
       file_visibility: ["customer", "staff_only"],
+      payment_status: [
+        "requires_payment",
+        "processing",
+        "requires_action",
+        "succeeded",
+        "canceled",
+        "failed",
+        "refunded",
+        "partially_refunded",
+      ],
       price_snapshot_type: [
         "fixed_amount",
         "estimated_range",

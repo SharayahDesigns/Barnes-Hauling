@@ -123,14 +123,10 @@ export async function autoAssignDumpster(
     });
 
     if (!insert.error) {
-      // Only claim an idle container. A container already mid-lifecycle keeps
-      // its operational status; the assignment row is what holds the dates.
-      await supabase
-        .from("dumpsters")
-        .update({ status: "reserved" })
-        .eq("id", candidate.id)
-        .eq("status", "available");
-
+      // The assignment row is what holds the dates. The container's own status
+      // is left alone: writing "reserved" onto it went stale as soon as the
+      // rental ended, because nothing switched it back. Inventory derives
+      // "Reserved" from active assignments instead.
       return { ok: true, assetNumber: candidate.asset_number };
     }
 

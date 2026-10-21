@@ -189,15 +189,9 @@ async function assignDumpsterToBookingInternal(params: {
     return { ok: false, error: message };
   }
 
-  const dumpsterStatusUpdate = await supabase
-    .from("dumpsters")
-    .update({ status: "reserved" })
-    .eq("id", dumpster.id)
-    .eq("status", "available");
-  if (dumpsterStatusUpdate.error) {
-    return { ok: false, error: "Booking was created, but the dumpster status could not be updated." };
-  }
-
+  // The assignment row holds the dates; the container's own status is not set
+  // to "reserved" (it went stale after the rental ended). Inventory derives
+  // "Reserved" from active assignments instead.
   return { ok: true, dumpsterAssetNumber: dumpster.asset_number };
 }
 

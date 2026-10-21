@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { businessConfig, isConfirmedBusinessFact } from "@/config/business";
 import { formatCents } from "@/config/public-content";
 import {
   checkPostalCodeAction,
@@ -10,12 +11,14 @@ import {
 } from "@/lib/booking/actions";
 import { createBookingCheckout } from "@/lib/booking/checkout";
 import { DUMPSTER_YARD_ADDRESS } from "@/lib/booking/delivery-zone";
+import { rentalPickupDate, rentalWindowConflict } from "@/lib/booking/rental-window";
 import {
   getBookingSizeOption,
   PREPAYMENT_AGREEMENT_TERMS,
   resolveBookingPrice,
   SMS_UPDATES_ENABLED,
   TRANSACTIONAL_CONSENT_LANGUAGE,
+  type BookingPreselection,
   type BookingSizeOption,
 } from "@/lib/booking/options";
 import type { SizeKey } from "@/lib/booking/schema";
@@ -54,26 +57,37 @@ type CustomQuoteErrors = Partial<Record<keyof CustomQuoteFormState, string>>;
 
 import styles from "./booking-flow.module.scss";
 import { DateCalendar } from "./date-calendar";
+import {
+  BOOKING_DRAFT_KEY,
+  clearBookingDraft,
+  LEGACY_BOOKING_DRAFT_KEY,
+} from "./draft-storage";
 import { PlacementMap } from "./placement-map";
 
 const MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-type StepId =
-  | "area"
-  | "size"
-  | "schedule"
-  | "contact"
-  | "placement"
-  | "review";
+type StepId = "size" | "load" | "schedule" | "area" | "contact" | "review";
 
+// Ordered to keep customers moving: start with the dumpster (often already
+// picked on the home page), show availability next, and ask for the address
+// and contact details only once they're invested. "load" is skipped
+// automatically when the chosen size has a single option.
 const STEPS: ReadonlyArray<{ id: StepId; label: string }> = [
-  { id: "area", label: "Service area" },
-  { id: "size", label: "Container" },
+  { id: "size", label: "Dumpster size" },
+  { id: "load", label: "What's going in" },
   { id: "schedule", label: "Delivery date" },
-  { id: "contact", label: "Contact" },
-  { id: "placement", label: "Placement" },
-  { id: "review", label: "Review" },
+  { id: "area", label: "Address" },
+  { id: "contact", label: "Your details" },
+  { id: "review", label: "Review & pay" },
 ];
+
+function stepIndexOf(id: StepId): number {
+  return STEPS.findIndex((item) => item.id === id);
+}
+
+function stepEyebrow(id: StepId): string {
+  return `Step ${stepIndexOf(id) + 1} of ${STEPS.length}`;
+}
 
 type FormState = {
   postalCode: string;
@@ -81,6 +95,8 @@ type FormState = {
   addressLine2: string;
   city: string;
   region: string;
+  /** Chosen size (sizeGroupKey); the option within it is sizeKey. */
+  sizeGroupKey: string;
   sizeKey: SizeKey | "";
   rentalDays: number | null;
   neededDate: string;
@@ -102,6 +118,7 @@ const EMPTY_FORM: FormState = {
   addressLine2: "",
   city: "",
   region: "",
+  sizeGroupKey: "",
   sizeKey: "",
   rentalDays: null,
   neededDate: "",
@@ -117,7 +134,6 @@ const EMPTY_FORM: FormState = {
   agreementAccepted: false,
 };
 
-const STORAGE_KEY = "barnes-booking-draft-v1";
 
 type Errors = Partial<Record<keyof FormState, string>>;
 
@@ -140,11 +156,14 @@ function validateStep(step: StepId, form: FormState): Errors {
       errors.region = "Use the 2-letter state code (for example, UT).";
   }
 
-  if (step === "size" && !form.sizeKey) {
-    errors.sizeKey = "Choose a container.";
+  if (step === "size" && !form.sizeGroupKey) {
+    errors.sizeKey = "Choose a dumpster size.";
   }
-  if (step === "size" && (!form.rentalDays || form.rentalDays <= 0)) {
-    errors.rentalDays = "Choose a rental duration.";
+  if (step === "load" && !form.sizeKey) {
+    errors.sizeKey = "Choose what you're putting in it.";
+  }
+  if (step === "load" && (!form.rentalDays || form.rentalDays <= 0)) {
+    errors.rentalDays = "Choose a rental length.";
   }
 
   if (step === "schedule") {
@@ -236,15 +255,97 @@ async function geocodeAddress(query: string): Promise<SuggestedAddress | null> {
   }
 }
 
+/** Rental length to start with for an option, keeping a valid current choice. */
+function defaultRentalDays(option: BookingSizeOption, current: number | null): number {
+  return option.rentalDayOptions.includes(current ?? -1)
+    ? (current as number)
+    : (option.rentalDayOptions[0] ?? option.rentalDays);
+}
+
+/**
+ * The furthest step (up to `target`) a restored draft can resume at: the
+ * first earlier step that no longer checks out wins, so a refresh never skips
+ * a validation, a rental-window check, or the address confirmation.
+ */
+function resumableStepIndex(
+  draft: FormState,
+  target: number,
+  sizeOptions: readonly BookingSizeOption[],
+  availability: DeliveryAvailability,
+): number {
+  const singleOption =
+    sizeOptions.filter((option) => option.sizeGroupKey === draft.sizeGroupKey).length === 1;
+  const last = Math.min(Math.max(target, 0), STEPS.length - 1);
+  for (let index = 0; index < last; index += 1) {
+    const id = STEPS[index].id;
+    if (id === "load" && singleOption) continue;
+    if (Object.keys(validateStep(id, draft)).length > 0) return index;
+    if (id === "schedule") {
+      const conflict = rentalWindowConflict(
+        availability.bySizeKey[draft.sizeKey] ?? [],
+        draft.neededDate,
+        draft.rentalDays ?? 1,
+      );
+      if (conflict) return index;
+    }
+    // The address step only completes once the address is confirmed.
+    if (id === "area" && (draft.placementLatitude == null || draft.placementLongitude == null)) {
+      return index;
+    }
+  }
+  return STEPS[last].id === "load" && singleOption ? last + 1 : last;
+}
+
+/** Applies a dumpster chosen before arriving (home/size page link). */
+function applyPreselection(
+  rawForm: FormState,
+  preselection: BookingPreselection | null,
+  sizeOptions: readonly BookingSizeOption[],
+): FormState {
+  // Drafts saved before sizes were chosen separately carry only sizeKey.
+  const savedOption = sizeOptions.find((item) => item.key === rawForm.sizeKey);
+  const form: FormState = savedOption
+    ? { ...rawForm, sizeGroupKey: savedOption.sizeGroupKey }
+    : {
+        ...rawForm,
+        sizeKey: "",
+        sizeGroupKey:
+          !rawForm.sizeKey &&
+          sizeOptions.some((item) => item.sizeGroupKey === rawForm.sizeGroupKey)
+            ? rawForm.sizeGroupKey
+            : "",
+      };
+  if (!preselection) return form;
+  const option = preselection.sizeKey
+    ? sizeOptions.find((item) => item.key === preselection.sizeKey)
+    : undefined;
+  if (option) {
+    return {
+      ...form,
+      sizeGroupKey: option.sizeGroupKey,
+      sizeKey: option.key,
+      rentalDays: defaultRentalDays(option, form.rentalDays),
+    };
+  }
+  // Size chosen but not the load: clear a load from another size.
+  return form.sizeGroupKey === preselection.groupKey
+    ? form
+    : { ...form, sizeGroupKey: preselection.groupKey, sizeKey: "", rentalDays: null };
+}
+
 export function BookingFlow({
   availability,
   sizeOptions,
+  preselection = null,
 }: Readonly<{
   availability: DeliveryAvailability;
   sizeOptions: readonly BookingSizeOption[];
+  preselection?: BookingPreselection | null;
 }>) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(() =>
+    applyPreselection(EMPTY_FORM, preselection, sizeOptions),
+  );
   const [errors, setErrors] = useState<Errors>({});
   const [addressModal, setAddressModal] = useState<AddressModalState | null>(
     null,
@@ -265,6 +366,10 @@ export function BookingFlow({
   const [customQuoteError, setCustomQuoteError] = useState<string | null>(null);
   const [customQuoteSubmitting, setCustomQuoteSubmitting] = useState(false);
   const [areaCheck, setAreaCheck] = useState<PostalCodeCheck | null>(null);
+  // Quick, approximate ZIP check on step 1 (exact price comes with the address).
+  const [zipCheck, setZipCheck] = useState<ZipCheckState | null>(null);
+  // Shown after a refresh or a return from Stripe without paying.
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
@@ -274,33 +379,84 @@ export function BookingFlow({
   } | null>(null);
   const restored = useRef(false);
 
-  // Restore an in-progress draft after mount. This must run in an effect (not a
-  // lazy initializer) because the page is statically prerendered — reading
-  // sessionStorage during render would diverge from the server HTML and break
-  // hydration. Restoring once, post-mount, is the correct pattern here.
+  // Restore an in-progress draft after mount: answers, the step they were
+  // on, and the ZIP check. This must run in an effect (not a lazy
+  // initializer) because the page is prerendered; reading sessionStorage
+  // during render would diverge from the server HTML and break hydration.
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const returnedFromCheckout = params.get("checkout") === "canceled";
     try {
-      const saved = window.sessionStorage.getItem(STORAGE_KEY);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time post-hydration restore from browser storage
-      if (saved) setForm({ ...EMPTY_FORM, ...JSON.parse(saved) });
+      const raw =
+        window.sessionStorage.getItem(BOOKING_DRAFT_KEY) ??
+        window.sessionStorage.getItem(LEGACY_BOOKING_DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as
+          | { form?: Partial<FormState>; stepIndex?: number; zipCheck?: ZipCheckState | null }
+          | Partial<FormState>;
+        const savedForm = "form" in parsed && parsed.form ? parsed.form : (parsed as Partial<FormState>);
+        const savedStep =
+          "stepIndex" in parsed && typeof parsed.stepIndex === "number" ? parsed.stepIndex : 0;
+        // A dumpster picked on the way in wins over the saved draft's choice.
+        // Consent is never restored: it has to be given in this visit.
+        const nextForm = applyPreselection(
+          { ...EMPTY_FORM, ...savedForm, agreementAccepted: false },
+          preselection,
+          sizeOptions,
+        );
+        const target = returnedFromCheckout ? STEPS.length - 1 : savedStep;
+        const resumeAt = resumableStepIndex(nextForm, target, sizeOptions, availability);
+        /* eslint-disable react-hooks/set-state-in-effect -- one-time post-hydration restore from browser storage */
+        setForm(nextForm);
+        setStepIndex(resumeAt);
+        if ("zipCheck" in parsed && parsed.zipCheck && parsed.zipCheck.status === "done") {
+          setZipCheck(parsed.zipCheck);
+        }
+        if (returnedFromCheckout) {
+          setResumeNotice("Payment wasn't completed. Your details are saved, so you can try again whenever you're ready.");
+        } else if (resumeAt > 0) {
+          setResumeNotice("Welcome back — we saved your progress.");
+        }
+        /* eslint-enable react-hooks/set-state-in-effect */
+      }
     } catch {
       // Ignore malformed drafts.
     }
+    // The ?size= / ?load= / ?checkout= link has done its job; drop it so a
+    // later refresh doesn't overwrite choices made since.
+    if (window.location.search) {
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+    }
+    // Runs once (guarded by restored.current).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persist progress so a refresh does not lose the customer's work.
   useEffect(() => {
     if (!restored.current) return;
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+      window.sessionStorage.setItem(
+        BOOKING_DRAFT_KEY,
+        JSON.stringify({
+          form: { ...form, agreementAccepted: false },
+          stepIndex,
+          zipCheck: zipCheck?.status === "done" ? zipCheck : null,
+        }),
+      );
+      window.sessionStorage.removeItem(LEGACY_BOOKING_DRAFT_KEY);
     } catch {
       // Storage may be unavailable (private mode); progress is best-effort.
     }
-  }, [form]);
+  }, [form, stepIndex, zipCheck]);
 
   const step = STEPS[stepIndex];
+  const groupOptions = sizeOptions.filter(
+    (option) => option.sizeGroupKey === form.sizeGroupKey,
+  );
+  // A size with one option has nothing to ask on the "What's going in" step.
+  const loadStepSkipped = groupOptions.length === 1;
 
   const selectedOption = form.sizeKey
     ? getBookingSizeOption(sizeOptions, form.sizeKey)
@@ -424,11 +580,77 @@ export function BookingFlow({
   }, [form.postalCode, form.placementLatitude, form.placementLongitude]);
 
   function advance() {
-    setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
+    setStepIndex((index) => {
+      const next = Math.min(index + 1, STEPS.length - 1);
+      return STEPS[next].id === "load" && loadStepSkipped ? next + 1 : next;
+    });
+    window.scrollTo?.({ top: 0, behavior: "smooth" });
+  }
+
+  /** Jump back to an earlier step (summary "Change" links, progress rail). */
+  function goTo(id: StepId) {
+    const target = stepIndexOf(id);
+    if (target < 0 || target >= stepIndex) return;
+    setErrors({});
+    setFormError(null);
+    setStepIndex(id === "load" && loadStepSkipped ? stepIndexOf("size") : target);
+  }
+
+  function chooseSize(groupKey: string) {
+    const options = sizeOptions.filter((option) => option.sizeGroupKey === groupKey);
+    setForm((prev) => {
+      if (options.length === 1) {
+        return {
+          ...prev,
+          sizeGroupKey: groupKey,
+          sizeKey: options[0].key,
+          rentalDays: defaultRentalDays(options[0], prev.rentalDays),
+        };
+      }
+      // Switching size means choosing the load again for that size.
+      return prev.sizeGroupKey === groupKey
+        ? prev
+        : { ...prev, sizeGroupKey: groupKey, sizeKey: "", rentalDays: null };
+    });
+    if (errors.sizeKey) setErrors((prev) => ({ ...prev, sizeKey: undefined }));
+  }
+
+  async function runZipCheck(postalCode: string) {
+    const zip = postalCode.trim();
+    if (!/^\d{5}$/.test(zip)) {
+      setZipCheck({ zip, status: "invalid" });
+      return;
+    }
+    update("postalCode", zip);
+    setZipCheck({ zip, status: "checking" });
+    try {
+      const place = await geocodeAddress(`${zip}, USA`);
+      if (place?.lat == null || place.lng == null) {
+        setZipCheck({ zip, status: "unknown" });
+        return;
+      }
+      const result = await checkPostalCodeAction({
+        postalCode: zip,
+        latitude: place.lat,
+        longitude: place.lng,
+      });
+      setZipCheck({ zip, status: "done", city: place.city, result });
+    } catch {
+      setZipCheck({ zip, status: "unknown" });
+    }
   }
 
   async function goNext() {
     const stepErrors = validateStep(step.id, form);
+    if (step.id === "schedule" && form.neededDate && form.sizeKey && !stepErrors.neededDate) {
+      // The whole rental must fit (also catches a length changed after picking a date).
+      const conflict = rentalWindowConflict(
+        availability.bySizeKey[form.sizeKey] ?? [],
+        form.neededDate,
+        selectedRentalDays ?? 1,
+      );
+      if (conflict) stepErrors.neededDate = conflict.message;
+    }
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
       return;
@@ -523,7 +745,11 @@ export function BookingFlow({
 
   function goBack() {
     setErrors({});
-    setStepIndex((index) => Math.max(index - 1, 0));
+    setFormError(null);
+    setStepIndex((index) => {
+      const previous = Math.max(index - 1, 0);
+      return STEPS[previous].id === "load" && loadStepSkipped ? previous - 1 : previous;
+    });
   }
 
   async function handleSubmit() {
@@ -580,7 +806,8 @@ export function BookingFlow({
           if (result.fieldErrors) setErrors(result.fieldErrors as Errors);
           return;
         }
-        window.sessionStorage.removeItem(STORAGE_KEY);
+        // Keep the draft: if they back out of Stripe they return with it.
+        // The confirmation page clears it once payment succeeds.
         window.location.assign(result.checkoutUrl);
         return;
       }
@@ -591,7 +818,7 @@ export function BookingFlow({
         if (result.fieldErrors) setErrors(result.fieldErrors as Errors);
         return;
       }
-      window.sessionStorage.removeItem(STORAGE_KEY);
+      clearBookingDraft();
       setConfirmation({
         referenceNumber: result.quoteNumber,
         serviceAreaConfirmed: result.serviceAreaConfirmed,
@@ -640,7 +867,7 @@ export function BookingFlow({
         return;
       }
 
-      window.sessionStorage.removeItem(STORAGE_KEY);
+      clearBookingDraft();
       setCustomQuoteOpen(false);
       setConfirmation({
         referenceNumber: result.quoteNumber,
@@ -701,46 +928,98 @@ export function BookingFlow({
   return (
     <div className={styles.wrapper}>
       <div className={styles.layout}>
-        <ol className={styles.progress} aria-label="Booking progress">
-          {STEPS.map((item, index) => {
-            const state =
-              index === stepIndex
-                ? styles.progressItemActive
-                : index < stepIndex
-                  ? styles.progressItemDone
-                  : "";
-            return (
-              <li
-                key={item.id}
-                className={`${styles.progressItem} ${state}`}
-                aria-current={index === stepIndex ? "step" : undefined}
-              >
-                <span className={styles.progressDot}>
-                  {index < stepIndex ? "✓" : index + 1}
-                </span>
-                {item.label}
-              </li>
-            );
-          })}
-        </ol>
+        <aside className={styles.aside}>
+          <ol className={styles.progress} aria-label="Booking progress">
+            {STEPS.map((item, index) => {
+              const done =
+                index < stepIndex || (item.id === "load" && loadStepSkipped && stepIndex > index);
+              const state =
+                index === stepIndex
+                  ? styles.progressItemActive
+                  : done
+                    ? styles.progressItemDone
+                    : "";
+              const content = (
+                <>
+                  <span className={styles.progressDot}>{done ? "✓" : index + 1}</span>
+                  {item.label}
+                </>
+              );
+              return (
+                <li
+                  key={item.id}
+                  className={`${styles.progressItem} ${state}`}
+                  aria-current={index === stepIndex ? "step" : undefined}
+                >
+                  {done && !(item.id === "load" && loadStepSkipped) ? (
+                    <button
+                      type="button"
+                      className={styles.progressButton}
+                      onClick={() => goTo(item.id)}
+                      aria-label={`Go back to ${item.label}`}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    content
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          <RentalSummary
+            form={form}
+            option={selectedOption}
+            groupOptions={groupOptions}
+            rentalDays={selectedRentalDays}
+            price={resolvedPrice}
+            surchargeCents={deliverySurchargeCents}
+            areaConfirmed={areaCheck?.status === "validated" || areaCheck?.status === "extended"}
+            stepIndex={stepIndex}
+            onChange={goTo}
+          />
+        </aside>
 
         <div className={styles.panel}>
+          {resumeNotice ? (
+            <div className={styles.resumeNotice} role="status">
+              <span>{resumeNotice}</span>
+              <button
+                type="button"
+                className={styles.resumeNoticeClose}
+                onClick={() => setResumeNotice(null)}
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          {step.id === "size" && (
+            <StepSize
+              form={form}
+              errors={errors}
+              sizeOptions={sizeOptions}
+              onChooseSize={chooseSize}
+              zipCheck={zipCheck}
+              onCheckZip={runZipCheck}
+            />
+          )}
+          {step.id === "load" && (
+            <StepLoad
+              form={form}
+              errors={errors}
+              onChange={update}
+              areaCheck={areaCheck}
+              options={groupOptions}
+              onOpenCustomQuote={openCustomQuote}
+            />
+          )}
           {step.id === "area" && (
             <StepArea
               form={form}
               errors={errors}
               onChange={update}
               areaCheck={areaCheck}
-            />
-          )}
-          {step.id === "size" && (
-            <StepSize
-              form={form}
-              errors={errors}
-              onChange={update}
-              areaCheck={areaCheck}
-              sizeOptions={sizeOptions}
-              onOpenCustomQuote={openCustomQuote}
             />
           )}
           {step.id === "schedule" && (
@@ -752,10 +1031,10 @@ export function BookingFlow({
             />
           )}
           {step.id === "contact" && (
-            <StepContact form={form} errors={errors} onChange={update} />
-          )}
-          {step.id === "placement" && (
-            <StepPlacement form={form} onChange={update} />
+            <>
+              <StepContact form={form} errors={errors} onChange={update} />
+              <StepPlacement form={form} onChange={update} />
+            </>
           )}
           {step.id === "review" && (
             <StepReview
@@ -817,6 +1096,15 @@ export function BookingFlow({
               </button>
             )}
           </div>
+          {isConfirmedBusinessFact(businessConfig.contact.phone) ? (
+            <p className={styles.callLine}>
+              Prefer to talk it through? Call{" "}
+              <a href={`tel:${businessConfig.contact.phone.value}`}>
+                {businessConfig.contact.phone.value}
+              </a>{" "}
+              and we&apos;ll book it with you.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -1241,7 +1529,7 @@ function StepArea({
   return (
     <>
       <header className={styles.stepHeader}>
-        <p className={styles.stepEyebrow}>Step 1 of 6</p>
+        <p className={styles.stepEyebrow}>{stepEyebrow("area")}</p>
         <h1 className={styles.stepTitle}>Where should we deliver?</h1>
         <p className={styles.stepSummary}>
           Enter the delivery address so we can confirm mileage and any delivery surcharge.
@@ -1348,30 +1636,173 @@ function StepArea({
   );
 }
 
+type SizeGroup = {
+  key: string;
+  sizeName: string;
+  dimensions: string;
+  image: string;
+  options: BookingSizeOption[];
+  fromCents: number | null;
+};
+
+/** Options of the same physical size, cheapest first. */
+function groupSizeOptions(sizeOptions: readonly BookingSizeOption[]): SizeGroup[] {
+  const groups = new Map<string, SizeGroup>();
+  for (const option of sizeOptions) {
+    let group = groups.get(option.sizeGroupKey);
+    if (!group) {
+      group = {
+        key: option.sizeGroupKey,
+        sizeName: option.sizeName,
+        dimensions: option.dimensions,
+        image: "",
+        options: [],
+        fromCents: null,
+      };
+      groups.set(option.sizeGroupKey, group);
+    }
+    group.options.push(option);
+  }
+  const priceOf = (option: BookingSizeOption) =>
+    option.price.type === "fixed" ? option.price.amountCents : Number.MAX_SAFE_INTEGER;
+  for (const group of groups.values()) {
+    group.options.sort((x, y) => priceOf(x) - priceOf(y));
+    const fixed = group.options.filter((option) => option.price.type === "fixed");
+    group.fromCents = fixed.length > 0 ? priceOf(fixed[0]) : null;
+    group.image = group.options.find((option) => option.image)?.image ?? "";
+  }
+  return [...groups.values()];
+}
+
+type ZipCheckState =
+  | { zip: string; status: "invalid" | "checking" | "unknown" }
+  | { zip: string; status: "done"; city: string; result: PostalCodeCheck };
+
+/**
+ * Quick delivery check by ZIP, measured to the ZIP's center. It's an
+ * estimate: the exact delivery price comes from the full address in the
+ * Address step. Optional, so it never blocks anyone from continuing.
+ */
+function ZipCheck({
+  initialZip,
+  state,
+  onCheck,
+}: Readonly<{
+  initialZip: string;
+  state: ZipCheckState | null;
+  onCheck: (zip: string) => void;
+}>) {
+  const [zip, setZip] = useState(initialZip);
+  const checking = state?.status === "checking";
+
+  let message: { tone: "ok" | "warn" | "bad"; text: string } | null = null;
+  if (state?.status === "invalid") {
+    message = { tone: "warn", text: "Enter a 5-digit ZIP code." };
+  } else if (state?.status === "unknown") {
+    message = {
+      tone: "warn",
+      text: "We couldn't check that ZIP right now. Keep going — we'll confirm with your address.",
+    };
+  } else if (state?.status === "done") {
+    const where = state.city ? `${state.city} (${state.zip})` : state.zip;
+    const { result } = state;
+    if (result.status === "validated") {
+      message = {
+        tone: "ok",
+        text: `Good news — we deliver to ${where}, and delivery is usually included. Your exact price is confirmed with your address.`,
+      };
+    } else if (result.status === "extended") {
+      message = {
+        tone: "ok",
+        text: `We deliver to ${where}. It's about ${result.distanceMiles?.toFixed(0)} miles out, so expect a delivery charge of about ${formatCents(result.surchargeCents ?? 0)}. Your exact price is confirmed with your address.`,
+      };
+    } else if (result.status === "out_of_range") {
+      message = {
+        tone: "bad",
+        text: `${where} looks outside our ${result.maxMiles}-mile delivery area for online booking. Give us a call and we'll see what we can do.`,
+      };
+    } else {
+      message = {
+        tone: "warn",
+        text: "We couldn't confirm that ZIP yet. Keep going — we'll confirm with your address.",
+      };
+    }
+  }
+
+  return (
+    <div className={styles.zipCheck}>
+      <label className={styles.zipCheckLabel} htmlFor="zipCheck">
+        Check that we deliver to you <span className={styles.optionalTag}>Optional</span>
+      </label>
+      <div className={styles.zipCheckRow}>
+        <input
+          id="zipCheck"
+          className={styles.input}
+          inputMode="numeric"
+          autoComplete="postal-code"
+          maxLength={5}
+          placeholder="ZIP code"
+          value={zip}
+          onChange={(event) => setZip(event.target.value.replace(/\D/g, "").slice(0, 5))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onCheck(zip);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={() => onCheck(zip)}
+          disabled={checking}
+        >
+          {checking ? "Checking…" : "Check"}
+        </button>
+      </div>
+      <p
+        className={`${styles.zipCheckResult} ${
+          message?.tone === "ok"
+            ? styles.zipCheckOk
+            : message?.tone === "bad"
+              ? styles.zipCheckBad
+              : ""
+        }`}
+        role="status"
+        aria-live="polite"
+      >
+        {message?.text ?? ""}
+      </p>
+    </div>
+  );
+}
+
+/** Step 1: pick a size (arrives preselected from home/size page links). */
 function StepSize({
   form,
   errors,
-  onChange,
-  areaCheck,
   sizeOptions,
-  onOpenCustomQuote,
-}: StepProps & {
-  areaCheck: PostalCodeCheck | null;
+  onChooseSize,
+  zipCheck,
+  onCheckZip,
+}: Readonly<{
+  form: FormState;
+  errors: Errors;
   sizeOptions: readonly BookingSizeOption[];
-  onOpenCustomQuote: () => void;
-}) {
-  const surchargeCents = areaCheck?.surchargeCents ?? 0;
-  const selectedOption = form.sizeKey
-    ? getBookingSizeOption(sizeOptions, form.sizeKey)
-    : null;
+  onChooseSize: (groupKey: string) => void;
+  zipCheck: ZipCheckState | null;
+  onCheckZip: (zip: string) => void;
+}>) {
+  const groups = groupSizeOptions(sizeOptions);
 
   return (
     <>
       <header className={styles.stepHeader}>
-        <p className={styles.stepEyebrow}>Step 2 of 6</p>
-        <h1 className={styles.stepTitle}>Choose your container</h1>
+        <p className={styles.stepEyebrow}>{stepEyebrow("size")}</p>
+        <h1 className={styles.stepTitle}>Choose your dumpster size</h1>
         <p className={styles.stepSummary}>
-          Choose your container and rental duration. Included weight depends on the container and approved material type.
+          Prices start at the amount shown. Next, you&apos;ll tell us what&apos;s
+          going in it.
         </p>
       </header>
       {errors.sizeKey && (
@@ -1380,118 +1811,194 @@ function StepSize({
         </p>
       )}
       <div className={styles.sizeGrid}>
-        {sizeOptions.map((option) => {
-          const selected = form.sizeKey === option.key;
-          const { allowed, notAllowed } = splitMaterialRules(option.materialRules);
-          const optionRentalDays =
-            option.rentalDayOptions.includes(form.rentalDays ?? -1)
-              ? (form.rentalDays as number)
-              : (option.rentalDayOptions[0] ?? option.rentalDays);
-          const optionPrice = resolveBookingPrice(option, optionRentalDays);
+        {groups.map((group) => {
+          const selected = group.key === form.sizeGroupKey;
           return (
             <button
               type="button"
-              key={option.key}
+              key={group.key}
               className={`${styles.sizeCard} ${selected ? styles.sizeCardSelected : ""}`}
-              onClick={() => {
-                onChange("sizeKey", option.key);
-                onChange(
-                  "rentalDays",
-                  option.rentalDayOptions.includes(form.rentalDays ?? -1)
-                    ? (form.rentalDays as number)
-                    : (option.rentalDayOptions[0] ?? option.rentalDays),
-                );
-              }}
+              onClick={() => onChooseSize(group.key)}
               aria-pressed={selected}
             >
-              {option.image ? (
-                <div className={styles.sizeMediaWrap}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={option.image}
-                    alt={`${option.size} dumpster`}
-                    className={styles.sizeMedia}
-                  />
-                </div>
-              ) : null}
+              <div className={styles.sizeMediaWrap}>
+                {group.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={group.image} alt={`${group.sizeName}`} className={styles.sizeMedia} />
+                ) : (
+                  <span className={styles.sizeMediaEmpty} aria-hidden="true">
+                    {group.sizeName.split(" ")[0]}
+                  </span>
+                )}
+              </div>
               <div className={styles.sizeDetails}>
                 <div className={styles.sizeCardHead}>
                   <div className={styles.sizeTitleBlock}>
-                    <p className={styles.sizeName}>
-                      {option.size} — {option.use}
-                    </p>
-                    <p className={styles.sizeUse}>{option.dimensions}</p>
+                    <p className={styles.sizeName}>{group.sizeName}</p>
+                    <p className={styles.sizeUse}>{group.dimensions}</p>
                   </div>
-                  {optionPrice.type === "fixed" ? (
+                  {group.fromCents != null ? (
                     <div className={styles.sizePriceBlock}>
-                      <span className={styles.sizePrice}>
-                        {formatCents(optionPrice.amountCents + surchargeCents)}
+                      <span className={styles.sizePriceDetail}>
+                        {group.options.length > 1 ? "From" : "Price"}
                       </span>
-                      {surchargeCents > 0 ? (
-                        <span className={styles.sizePriceDetail}>
-                          Includes {formatCents(surchargeCents)} delivery distance
-                        </span>
-                      ) : areaCheck?.status === "validated" ? (
-                        <span className={styles.sizePriceDetail}>
-                          Delivery included within 20 miles
-                        </span>
-                      ) : null}
+                      <span className={styles.sizePrice}>{formatCents(group.fromCents)}</span>
                     </div>
                   ) : (
-                    <span className={styles.sizePriceQuote}>
-                      {optionPrice.label}
-                    </span>
+                    <span className={styles.sizePriceQuote}>Quote required</span>
                   )}
                 </div>
                 <div className={styles.sizeMeta}>
-                  <span className={`${styles.sizeMetaPill} ${styles.sizeMetaPillWeight}`}>
-                    {option.includedWeightLabel}
-                  </span>
                   <span className={styles.sizeMetaPill}>
-                    {option.rentalDayOptions.map((days) => `${days}-day`).join(", ")}
+                    {group.options.length > 1
+                      ? group.options.map((option) => option.optionLabel).join(" or ")
+                      : group.options[0].optionLabel}
                   </span>
-                </div>
-                <div className={styles.sizeRuleGroups}>
-                  {allowed.length > 0 ? (
-                    <div className={styles.sizeRuleGroup}>
-                      <span className={styles.sizeRuleLabel}>Allowed</span>
-                      <div className={styles.sizeRuleChips}>
-                        {allowed.map((rule) => (
-                          <span key={rule} className={styles.sizeRuleChip}>
-                            {rule}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {notAllowed.length > 0 ? (
-                    <div className={styles.sizeRuleGroup}>
-                      <span
-                        className={`${styles.sizeRuleLabel} ${styles.sizeRuleLabelDanger}`}
-                      >
-                        Not allowed
-                      </span>
-                      <div className={styles.sizeRuleChips}>
-                        {notAllowed.map((rule) => (
-                          <span
-                            key={rule}
-                            className={`${styles.sizeRuleChip} ${styles.sizeRuleChipDanger}`}
-                          >
-                            {rule}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </button>
           );
         })}
       </div>
+      <ZipCheck initialZip={form.postalCode} state={zipCheck} onCheck={onCheckZip} />
+    </>
+  );
+}
+
+/** Two short lists, allowed and not allowed, for a load card. */
+function LoadMaterials({ materialRules }: Readonly<{ materialRules: readonly string[] }>) {
+  const { allowed, notAllowed } = splitMaterialRules(materialRules);
+  if (allowed.length === 0 && notAllowed.length === 0) return null;
+  return (
+    <span className={styles.loadMaterials}>
+      {allowed.length > 0 ? (
+        <span className={styles.loadMaterialsCol}>
+          <span className={styles.loadMaterialsLabel}>Allowed</span>
+          <ul className={styles.loadMaterialsList}>
+            {allowed.map((item) => (
+              <li key={item}>
+                <svg viewBox="0 0 16 16" aria-hidden="true" className={styles.loadMaterialsYes}>
+                  <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </span>
+      ) : null}
+      {notAllowed.length > 0 ? (
+        <span className={styles.loadMaterialsCol}>
+          <span className={`${styles.loadMaterialsLabel} ${styles.loadMaterialsLabelNo}`}>
+            Not allowed
+          </span>
+          <ul className={styles.loadMaterialsList}>
+            {notAllowed.map((item) => (
+              <li key={item}>
+                <svg viewBox="0 0 16 16" aria-hidden="true" className={styles.loadMaterialsNo}>
+                  <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * Step 2: what's going in it. Each choice is one of the chosen size's catalog
+ * options, so the booking still records exactly one option (sizeKey) and
+ * checkout, pricing, and dumpster assignment are unchanged.
+ */
+function StepLoad({
+  form,
+  errors,
+  onChange,
+  areaCheck,
+  options,
+  onOpenCustomQuote,
+}: StepProps & {
+  areaCheck: PostalCodeCheck | null;
+  options: readonly BookingSizeOption[];
+  onOpenCustomQuote: () => void;
+}) {
+  const surchargeCents = areaCheck?.surchargeCents ?? 0;
+  const selectedOption = options.find((option) => option.key === form.sizeKey) ?? null;
+  const priceLabel = (cents: number) => formatCents(cents + surchargeCents);
+
+  function selectOption(option: BookingSizeOption) {
+    onChange("sizeKey", option.key);
+    onChange("rentalDays", defaultRentalDays(option, form.rentalDays));
+  }
+
+  return (
+    <>
+      <header className={styles.stepHeader}>
+        <p className={styles.stepEyebrow}>{stepEyebrow("load")}</p>
+        <h1 className={styles.stepTitle}>What are you putting in it?</h1>
+        <p className={styles.stepSummary}>
+          Choose the one that matches your whole load. Different load types
+          can&apos;t be mixed in one dumpster.
+        </p>
+      </header>
+      {errors.sizeKey && (
+        <p className={styles.errorText} role="alert">
+          {errors.sizeKey}
+        </p>
+      )}
+      <fieldset className={styles.loadFieldset}>
+        <legend className={styles.visuallyHidden}>Load type</legend>
+        <div className={styles.loadGrid}>
+          {options.map((option) => {
+            const selected = form.sizeKey === option.key;
+            const price = resolveBookingPrice(option, defaultRentalDays(option, form.rentalDays));
+            return (
+              <label
+                key={option.key}
+                className={`${styles.loadCard} ${selected ? styles.loadCardSelected : ""}`}
+              >
+                <span className={styles.loadCardHead}>
+                  <input
+                    type="radio"
+                    name="loadType"
+                    value={option.key}
+                    checked={selected}
+                    onChange={() => selectOption(option)}
+                    className={styles.loadRadio}
+                  />
+                  <span className={styles.loadCardTitle}>
+                    <span className={styles.loadCardName}>{option.optionLabel}</span>
+                    {option.use ? <span className={styles.loadCardUse}>{option.use}</span> : null}
+                  </span>
+                  <span className={styles.loadCardPrice}>
+                    {price.type === "fixed" ? priceLabel(price.amountCents) : price.label}
+                  </span>
+                </span>
+                <span className={styles.loadCardFacts}>
+                  {option.includedTons != null ? (
+                    <span>{option.includedTons} tons included</span>
+                  ) : (
+                    <span>{option.includedWeightLabel}</span>
+                  )}
+                  <span aria-hidden="true">·</span>
+                  <span>
+                    {option.rentalDayOptions.length > 1
+                      ? `${option.rentalDayOptions.slice(0, -1).join(", ")} or ${option.rentalDayOptions.at(-1)} days`
+                      : `${option.rentalDayOptions[0] ?? option.rentalDays} days`}
+                  </span>
+                </span>
+                <LoadMaterials materialRules={option.materialRules} />
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
       {selectedOption ? (
         <fieldset className={styles.fieldset} style={{ marginTop: "var(--space-4)" }}>
-          <Field id="rentalDays" label="Rental duration" error={errors.rentalDays}>
+          <Field id="rentalDays" label="Rental length" error={errors.rentalDays}>
             <select
               id="rentalDays"
               className={`${styles.select} ${errors.rentalDays ? styles.inputError : ""}`}
@@ -1500,7 +2007,7 @@ function StepSize({
               aria-invalid={Boolean(errors.rentalDays)}
             >
               <option value="" disabled>
-                Choose rental duration
+                Choose rental length
               </option>
               {selectedOption.rentalDayOptions.map((days) => (
                 <option key={days} value={days}>
@@ -1513,10 +2020,8 @@ function StepSize({
       ) : null}
       <p className={styles.helpText}>
         {areaCheck?.status === "extended"
-          ? `Prices below include the extra distance charge for this address: ${areaCheck.distanceMiles?.toFixed(1)} miles from the yard, with ${formatCents(areaCheck.surchargeCents ?? 0)} added for the excess miles beyond the 20-mile included area.`
-          : areaCheck?.status === "validated"
-            ? "Prices below include delivery inside the standard 20-mile service area. Taxes are confirmed before payment."
-            : "Prices shown are the base rental rate for the selected duration. Taxes and any delivery charge are confirmed once your address is verified."}
+          ? `Prices above include the extra distance charge for your address (${formatCents(areaCheck.surchargeCents ?? 0)}).`
+          : "Prices shown are the base rental rate. Taxes and any delivery charge are confirmed once your address is verified."}
       </p>
       <div className={styles.customQuoteCallout}>
         <div className={styles.customQuoteCalloutBody}>
@@ -1527,15 +2032,143 @@ function StepSize({
             Barnes will review pricing and availability.
           </p>
         </div>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={onOpenCustomQuote}
-        >
+        <button type="button" className={styles.secondaryButton} onClick={onOpenCustomQuote}>
           Get custom quote
         </button>
       </div>
     </>
+  );
+}
+
+function formatNeededDate(value: string): string {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+/**
+ * "Your rental": what's chosen so far and the price, visible on every step
+ * with Change links back to earlier steps, so there are no surprises at
+ * review.
+ */
+function RentalSummary({
+  form,
+  option,
+  groupOptions,
+  rentalDays,
+  price,
+  surchargeCents,
+  areaConfirmed,
+  stepIndex,
+  onChange,
+}: Readonly<{
+  form: FormState;
+  option: BookingSizeOption | null;
+  groupOptions: readonly BookingSizeOption[];
+  rentalDays: number | null;
+  price: BookingSizeOption["price"] | null;
+  surchargeCents: number;
+  areaConfirmed: boolean;
+  stepIndex: number;
+  onChange: (id: StepId) => void;
+}>) {
+  const sizeName = option?.sizeName ?? groupOptions[0]?.sizeName ?? null;
+  const canChange = (id: StepId) => stepIndexOf(id) < stepIndex;
+  const rows: Array<{ label: string; value: string; step: StepId }> = [];
+  if (sizeName) rows.push({ label: "Dumpster", value: sizeName, step: "size" });
+  if (option && groupOptions.length > 1) {
+    rows.push({ label: "Load", value: option.optionLabel, step: "load" });
+  }
+  if (option && rentalDays) {
+    rows.push({ label: "Rental", value: `${rentalDays} day${rentalDays === 1 ? "" : "s"}`, step: "load" });
+  }
+  if (form.neededDate) {
+    rows.push({
+      label: "Dates",
+      value: rentalDays
+        ? `${formatNeededDate(form.neededDate)} → ${formatNeededDate(rentalPickupDate(form.neededDate, rentalDays))}`
+        : formatNeededDate(form.neededDate),
+      step: "schedule",
+    });
+  }
+  if (areaConfirmed && form.addressLine1) {
+    rows.push({ label: "Address", value: `${form.addressLine1}, ${form.city}`, step: "area" });
+  }
+
+  const fixed = price?.type === "fixed" ? price.amountCents : null;
+  const fromCents =
+    !option && groupOptions.length > 0
+      ? Math.min(
+          ...groupOptions.map((item) =>
+            item.price.type === "fixed" ? item.price.amountCents : Number.MAX_SAFE_INTEGER,
+          ),
+        )
+      : null;
+
+  return (
+    <section className={styles.summaryCard} aria-labelledby="rental-summary-title">
+      <h2 id="rental-summary-title" className={styles.summaryCardTitle}>
+        Your rental
+      </h2>
+      {rows.length === 0 ? (
+        <p className={styles.summaryCardEmpty}>Pick a dumpster size to see your price.</p>
+      ) : (
+        <dl className={styles.summaryCardList}>
+          {rows.map((row) => (
+            <div key={row.label} className={styles.summaryCardRow}>
+              <dt>{row.label}</dt>
+              <dd>
+                {row.value}
+                {canChange(row.step) ? (
+                  <button
+                    type="button"
+                    className={styles.summaryChange}
+                    onClick={() => onChange(row.step)}
+                    aria-label={`Change ${row.label.toLowerCase()}`}
+                  >
+                    Change
+                  </button>
+                ) : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {fixed != null ? (
+        <div className={styles.summaryCardTotal}>
+          {surchargeCents > 0 ? (
+            <p className={styles.summaryCardLine}>
+              <span>Delivery distance</span>
+              <span>{formatCents(surchargeCents)}</span>
+            </p>
+          ) : null}
+          <p className={styles.summaryCardPrice}>
+            <span>{areaConfirmed ? "Total" : "Price so far"}</span>
+            <span>{formatCents(fixed + surchargeCents)}</span>
+          </p>
+          <p className={styles.summaryCardNote}>
+            {areaConfirmed
+              ? "Taxes are confirmed before payment."
+              : "Delivery charge, if any, is added once we have your address."}
+          </p>
+        </div>
+      ) : price?.type === "quote_required" ? (
+        <p className={styles.summaryCardNote}>{price.label}</p>
+      ) : fromCents != null && fromCents < Number.MAX_SAFE_INTEGER ? (
+        <div className={styles.summaryCardTotal}>
+          <p className={styles.summaryCardPrice}>
+            <span>From</span>
+            <span>{formatCents(fromCents)}</span>
+          </p>
+          <p className={styles.summaryCardNote}>Depends on what&apos;s going in it.</p>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -1548,10 +2181,11 @@ function StepSchedule({
   return (
     <>
       <header className={styles.stepHeader}>
-        <p className={styles.stepEyebrow}>Step 3 of 6</p>
+        <p className={styles.stepEyebrow}>{stepEyebrow("schedule")}</p>
         <h1 className={styles.stepTitle}>When do you need it?</h1>
         <p className={styles.stepSummary}>
-          Pick your preferred delivery date. Greyed-out days are unavailable.
+          Pick your delivery day. We&apos;ll show the whole rental through
+          pickup. Red days can&apos;t start a rental of this length.
         </p>
       </header>
       <fieldset className={styles.fieldset}>
@@ -1561,6 +2195,7 @@ function StepSchedule({
           unavailable={
             form.sizeKey ? (availability.bySizeKey[form.sizeKey] ?? []) : []
           }
+          rentalDays={form.rentalDays ?? 1}
           value={form.neededDate}
           onChange={(date) => onChange("neededDate", date)}
         />
@@ -1569,10 +2204,26 @@ function StepSchedule({
             {errors.neededDate}
           </p>
         )}
+        {form.neededDate && form.rentalDays ? (
+          <div className={styles.rentalSpan} role="status" aria-live="polite">
+            <span>
+              <strong>Delivery</strong>
+              {formatNeededDate(form.neededDate)}
+            </span>
+            <span>
+              <strong>Pickup</strong>
+              {formatNeededDate(rentalPickupDate(form.neededDate, form.rentalDays))}
+            </span>
+            <span>
+              <strong>Rental</strong>
+              {form.rentalDays} day{form.rentalDays === 1 ? "" : "s"}
+            </span>
+          </div>
+        ) : null}
         <p className={styles.helpText}>
           {form.neededDate
-            ? `Selected: ${form.neededDate}. We'll confirm the exact delivery window.`
-            : "Same-day and next-day availability depends on the schedule and is confirmed by our team."}
+            ? "We'll confirm the exact delivery and pickup windows."
+            : "Pick the day you want it delivered. We'll show your pickup day."}
         </p>
       </fieldset>
     </>
@@ -1583,7 +2234,7 @@ function StepContact({ form, errors, onChange }: StepProps) {
   return (
     <>
       <header className={styles.stepHeader}>
-        <p className={styles.stepEyebrow}>Step 4 of 6</p>
+        <p className={styles.stepEyebrow}>{stepEyebrow("contact")}</p>
         <h1 className={styles.stepTitle}>Your contact details</h1>
         <p className={styles.stepSummary}>
           We use these to confirm your booking and send delivery updates.
@@ -1673,13 +2324,15 @@ function StepPlacement({
 }: Pick<StepProps, "form" | "onChange">) {
   return (
     <>
-      <header className={styles.stepHeader}>
-        <p className={styles.stepEyebrow}>Step 5 of 6</p>
-        <h1 className={styles.stepTitle}>Where should it go?</h1>
-        <p className={styles.stepSummary}>
-          Tell us exactly where to place the dumpster on your property.
+      <div className={styles.subsectionHeader}>
+        <h2 className={styles.choiceHeading}>
+          Where should it go? <span className={styles.optionalTag}>Optional</span>
+        </h2>
+        <p className={styles.helpText}>
+          Drop a pin or add notes so the driver knows exactly where to place it.
+          You can skip this and tell the driver later.
         </p>
-      </header>
+      </div>
       <PlacementMap
         address={{
           line1: form.addressLine1,
@@ -1743,7 +2396,7 @@ function StepReview({
   return (
     <>
       <header className={styles.stepHeader}>
-        <p className={styles.stepEyebrow}>Step 6 of 6</p>
+        <p className={styles.stepEyebrow}>{stepEyebrow("review")}</p>
         <h1 className={styles.stepTitle}>Review and confirm</h1>
         <p className={styles.stepSummary}>
           Check your details, then accept the load and weight terms.
@@ -1772,8 +2425,18 @@ function StepReview({
           </dd>
         </div>
         <div className={styles.summaryRow}>
-          <dt className={styles.summaryTerm}>Delivery date</dt>
-          <dd className={styles.summaryValue}>{form.neededDate || "—"}</dd>
+          <dt className={styles.summaryTerm}>Delivery</dt>
+          <dd className={styles.summaryValue}>
+            {form.neededDate ? formatNeededDate(form.neededDate) : "—"}
+          </dd>
+        </div>
+        <div className={styles.summaryRow}>
+          <dt className={styles.summaryTerm}>Pickup</dt>
+          <dd className={styles.summaryValue}>
+            {form.neededDate && rentalDays
+              ? formatNeededDate(rentalPickupDate(form.neededDate, rentalDays))
+              : "—"}
+          </dd>
         </div>
         <div className={styles.summaryRow}>
           <dt className={styles.summaryTerm}>Contact</dt>

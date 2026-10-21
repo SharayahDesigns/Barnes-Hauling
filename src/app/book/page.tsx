@@ -1,6 +1,7 @@
 import { siteRoutes } from "@/config/site";
 import { getDeliveryAvailability } from "@/lib/booking/availability";
 import { loadBookingSizeOptions } from "@/lib/booking/catalog";
+import { resolveBookingPreselection } from "@/lib/booking/options";
 import { resolveDumpsterServiceId, todayInDenver } from "@/lib/booking/records";
 import type { DeliveryAvailability } from "@/lib/booking/types";
 import { createPageMetadata } from "@/lib/page-metadata";
@@ -32,8 +33,25 @@ async function loadAvailability(): Promise<DeliveryAvailability> {
   }
 }
 
-export default async function BookPage() {
+export default async function BookPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ size?: string | string[]; load?: string | string[] }>;
+}) {
+  const { size, load } = await searchParams;
   const availability = await loadAvailability();
   const sizeOptions = await loadBookingSizeOptions();
-  return <BookingFlow availability={availability} sizeOptions={sizeOptions} />;
+  // /book?size=15-yard[&load=<option>] arrives with that dumpster selected.
+  const preselection = resolveBookingPreselection(
+    sizeOptions,
+    typeof size === "string" ? size : undefined,
+    typeof load === "string" ? load : undefined,
+  );
+  return (
+    <BookingFlow
+      availability={availability}
+      sizeOptions={sizeOptions}
+      preselection={preselection}
+    />
+  );
 }

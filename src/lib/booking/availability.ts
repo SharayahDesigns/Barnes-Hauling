@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { denverDate, todayInDenver } from "./records";
+import { rentalWindowConflict } from "./rental-window";
 import type { DeliveryAvailability, UnavailableReason } from "./types";
 
 type AdminDb = SupabaseClient;
@@ -85,6 +86,18 @@ export async function getDeliveryAvailability(
         .eq("item_kind", "rental_package")
         .eq("status", "active"),
     ]);
+  // Dumpsters that can go out, per size: the same rule auto-assign uses.
+  const fleetResult = await supabase
+    .from("dumpsters")
+    .select("dumpster_sizes(code)")
+    .not("status", "in", "(retired,maintenance,unavailable,inspection_required)");
+  const fleetBySize = new Map<string, number>();
+  for (const row of ((fleetResult.data ?? []) as unknown as Array<{
+    dumpster_sizes: { code: string } | null;
+  }>)) {
+    const code = row.dumpster_sizes?.code;
+    if (code) fleetBySize.set(code, (fleetBySize.get(code) ?? 0) + 1);
+  }
 
   const blackouts = (blackoutResult.data ?? []) as Array<{
     starts_at: string;
@@ -188,6 +201,9 @@ export async function getDeliveryAvailability(
     // Blackouts and closed weekdays still apply: failing open here would offer
     // customers dates the business has closed.
     const occupancy = code ? occupancyBySize.get(code) : undefined;
+    // A date is booked out only when every dumpster of the size is in use,
+    // so a second 15-yard adds real capacity.
+    const fleet = Math.max(1, code ? (fleetBySize.get(code) ?? 0) : 1);
     const list: UnavailableReason[] = [];
 
     for (let date = minDate; date <= maxDate; date = addDaysIso(date, 1)) {
@@ -196,12 +212,12 @@ export async function getDeliveryAvailability(
         list.push(shared);
         continue;
       }
-      // Size-specific: any reserved/assigned dumpster of this size blocks the date.
-      if ((occupancy?.get(date) ?? 0) >= 1) {
+      // Size-specific: blocked once every dumpster of this size is out.
+      if ((occupancy?.get(date) ?? 0) >= fleet) {
         list.push({
           date,
-          kind: "reserved",
-          message: "This dumpster size is already reserved for this date.",
+          kind: "booked",
+          message: "This dumpster size is already booked for this date.",
         });
       }
     }
@@ -225,6 +241,7 @@ export async function checkDeliveryDate(
   serviceId: string,
   sizeKey: string,
   date: string,
+  rentalDays: number,
 ): Promise<DeliveryDateCheck> {
   const availability = await getDeliveryAvailability(supabase, serviceId);
   if (date < availability.minDate) {
@@ -233,8 +250,11 @@ export async function checkDeliveryDate(
   if (date > availability.maxDate) {
     return { available: false, message: "Please choose a delivery date sooner." };
   }
-  const reason = (availability.bySizeKey[sizeKey] ?? []).find(
-    (entry) => entry.date === date,
+  // The whole rental, delivery through pickup, must fit, not just day one.
+  const reason = rentalWindowConflict(
+    availability.bySizeKey[sizeKey] ?? [],
+    date,
+    rentalDays,
   );
   if (reason) {
     return { available: false, message: reason.message };

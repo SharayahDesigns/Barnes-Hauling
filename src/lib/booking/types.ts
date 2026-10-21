@@ -27,7 +27,11 @@ export type SubmitBookingResult =
 export type UnavailableReason = {
   /** YYYY-MM-DD (Denver local). */
   date: string;
-  kind: "blackout" | "reserved" | "closed";
+  /**
+   * blackout/closed/reserved: no delivery that day (all sizes).
+   * booked: every dumpster of this size is out on a rental that day.
+   */
+  kind: "blackout" | "reserved" | "closed" | "booked";
   /** Customer-facing explanation shown when the date is clicked. */
   message: string;
 };

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { DUMPSTER_STATUSES, humanizeStatus } from "@/lib/admin/dumpster-status";
+import { MANUAL_DUMPSTER_STATUSES, humanizeStatus } from "@/lib/admin/dumpster-status";
 import {
   updateDumpsterStatus,
   type InventoryFormState,
@@ -33,9 +33,17 @@ export function UpdateStatusForm({
         ariaLabel={`Status for ${assetNumber}`}
         saveLabel="Save status"
       >
-        {DUMPSTER_STATUSES.map((option) => (
+        {/* A legacy hand-set "reserved" still displays so the select isn't blank. */}
+        {(MANUAL_DUMPSTER_STATUSES as readonly string[]).includes(status) ? null : (
+          <option value={status} disabled>
+            {humanizeStatus(status)}
+          </option>
+        )}
+        {MANUAL_DUMPSTER_STATUSES.map((option) => (
           <option key={option} value={option}>
-            {humanizeStatus(option)}
+            {/* "Available" here means physically ready; whether it's booked
+                comes from its bookings and shows in the status badge. */}
+            {option === "available" ? "ready to rent" : humanizeStatus(option)}
           </option>
         ))}
       </AutoSubmitSelect>

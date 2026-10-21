@@ -3,16 +3,16 @@ import Link from "next/link";
 
 import {
   CtaBand,
-  DumpsterCard,
   FaqList,
-  InventoryDumpsterCard,
   PageHero,
+  PricingUnavailable,
   SectionIntro,
+  SizeGroupCard,
   marketingStyles as styles,
 } from "@/components/marketing/marketing";
 import { ImageStrip } from "@/components/marketing/image-strip";
 import { ScrollReveal } from "@/components/marketing/scroll-reveal";
-import { loadHomepageDumpsters } from "@/lib/home/dumpster-inventory";
+import { groupDumpstersBySize, loadHomepageDumpsters } from "@/lib/home/dumpster-inventory";
 import {
   AlertTriangleIcon,
   CalendarIcon,
@@ -33,7 +33,7 @@ import {
   UserIcon,
   UsersIcon,
 } from "@/components/marketing/icons";
-import { dumpsterRates, homepageFaqs } from "@/config/public-content";
+import { dumpsterFees, formatCents, homepageFaqs } from "@/config/public-content";
 import { siteRoutes } from "@/config/site";
 import { createPageMetadata } from "@/lib/page-metadata";
 
@@ -47,7 +47,8 @@ export const metadata = createPageMetadata(
 export const revalidate = 60;
 
 export default async function Home() {
-  const inventoryDumpsters = await loadHomepageDumpsters();
+  // One card per size, priced "from" its cheapest option.
+  const sizeGroups = groupDumpstersBySize(await loadHomepageDumpsters());
 
   return (
     <>
@@ -94,7 +95,7 @@ export default async function Home() {
             <SectionIntro
               eyebrow="Dumpster rentals made simple"
               title="Pick your size. We deliver. You fill it. We haul it away."
-              text="Approved residential pricing starts at 48-hour and 5-day options for the 15-yard container, plus a 5-day 22-yard option. Included weight, allowed materials, and any excess-mile delivery charge are spelled out before you book."
+              text="Pick a size. The price depends on what you're putting in it, and you'll choose that when you book. Any excess-mile delivery charge is spelled out before you pay."
             />
             <div className={styles.dumpsterIntroMedia}>
               <Image
@@ -106,15 +107,16 @@ export default async function Home() {
               />
             </div>
           </div>
-          <div className={styles.priceGrid}>
-            {inventoryDumpsters.length > 0
-              ? inventoryDumpsters.map((dumpster) => (
-                  <InventoryDumpsterCard key={dumpster.id} dumpster={dumpster} />
-                ))
-              : dumpsterRates.map((rate) => (
-                  <DumpsterCard key={rate.key} rate={rate} />
-                ))}
-          </div>
+          {sizeGroups.length > 0 ? (
+            <div className={styles.priceGrid}>
+              {sizeGroups.map((group) => (
+                <SizeGroupCard key={group.key} group={group} />
+              ))}
+            </div>
+          ) : (
+            // Never fall back to typed-in prices; they drift from the admin.
+            <PricingUnavailable />
+          )}
         </div>
       </section>
       </ScrollReveal>
@@ -347,7 +349,8 @@ export default async function Home() {
             <p className={styles.svcLede}>
               We deliver dumpsters within a 20-mile radius of Herriman, Utah —
               covering most of Salt Lake County. Need a delivery beyond 20 miles?
-              No problem. We go up to 60 miles for an additional $2.00/mile.
+              No problem. We go up to 60 miles for an additional{" "}
+              {formatCents(dumpsterFees.excessMileage.amountCents)}/mile.
             </p>
             <ul className={styles.svcCities}>
               {[

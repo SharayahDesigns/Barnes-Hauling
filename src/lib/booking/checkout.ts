@@ -74,6 +74,7 @@ export async function createBookingCheckout(
     serviceId,
     input.sizeKey,
     input.neededDate,
+    input.rentalDays,
   );
   if (!availability.available) {
     return {

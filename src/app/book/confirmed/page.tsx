@@ -5,6 +5,7 @@ import { createPageMetadata } from "@/lib/page-metadata";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import styles from "../booking-flow.module.scss";
+import { ClearBookingDraft } from "./clear-draft";
 import { SettlingRefresh } from "./settling-refresh";
 
 export const metadata = createPageMetadata(
@@ -89,6 +90,8 @@ export default async function BookingConfirmedPage({
                 ? "Thanks — your payment went through. Our team will review the details, confirm your delivery date, and finalize your total."
                 : "Thanks — we've received your request. We're finalizing your payment now; this page updates on its own."}
           </p>
+          {/* Stripe only sends customers here after a successful payment. */}
+          {sessionId ? <ClearBookingDraft /> : null}
           {/* Stripe's redirect often arrives before its webhook does. */}
           {sessionId && !settled ? <SettlingRefresh /> : null}
           {payment && (

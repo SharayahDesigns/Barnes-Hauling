@@ -96,6 +96,7 @@ export async function submitBookingDraft(
     serviceId,
     input.sizeKey,
     input.neededDate,
+    input.rentalDays,
   );
   if (!availability.available) {
     return {

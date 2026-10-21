@@ -9,25 +9,17 @@ import {
 } from "@/lib/admin/inventory";
 
 import styles from "../../admin.module.scss";
-import { MaterialsInput } from "./materials-input";
-import { RentalDurationsInput } from "./rental-durations-input";
 
 const INITIAL: InventoryFormState = {};
 
 type DumpsterDetails = {
   id: string;
   dumpsterSizeId: string;
-  serviceItemId: string | null;
   assetNumber: string;
   imagePublicUrl: string | null;
   currentLocation: string | null;
   conditionNotes: string | null;
   imagePath: string | null;
-  rentalPriceCents: number | null;
-  maxWeightTons: number | null;
-  materialsAllowed: string[];
-  materialsNotAllowed: string[];
-  rentalDurationDays: number[];
   lengthFeet: number | null;
   widthFeet: number | null;
   wallHeightFeet: number | null;
@@ -35,12 +27,8 @@ type DumpsterDetails = {
 
 export function EditDetailsForm({
   dumpster,
-  serviceItems,
-  supportsServiceItemAssignments,
 }: Readonly<{
   dumpster: DumpsterDetails;
-  serviceItems: ReadonlyArray<{ id: string; name: string }>;
-  supportsServiceItemAssignments: boolean;
 }>) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,27 +47,14 @@ export function EditDetailsForm({
     <>
       <button
         type="button"
-        className={styles.editSummary}
+        className={styles.tableAction}
+        aria-label={`Edit dumpster ${dumpster.assetNumber}`}
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={`edit-dumpster-modal-${dumpster.id}`}
       >
-        <span className={styles.editSummaryLabel}>
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-          </svg>
-          Edit details
-        </span>
+        Edit
       </button>
 
       {open ? (
@@ -106,7 +81,8 @@ export function EditDetailsForm({
                   Edit {dumpster.assetNumber}
                 </h2>
                 <p className={styles.editModalSub}>
-                  Update booking package, pricing, image, rental options, and material limits.
+                  Location, condition, and photo for this dumpster.
+                  Dimensions apply to every dumpster of this size.
                 </p>
               </div>
               <button
@@ -148,70 +124,11 @@ export function EditDetailsForm({
                   {state.success}
                 </p>
               ) : null}
-              {!supportsServiceItemAssignments ? (
-                <p className={styles.notice} role="status">
-                  Booking package changes will not persist until the
-                  `dumpsters.service_item_id` database migration is applied.
-                </p>
-              ) : null}
               <div className={styles.formGrid}>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor={`service-item-${dumpster.id}`}>
-                    Booking package
-                  </label>
-                  <select
-                    id={`service-item-${dumpster.id}`}
-                    name="serviceItemId"
-                    className={styles.select}
-                    defaultValue={dumpster.serviceItemId ?? ""}
-                    required
-                  >
-                    <option value="" disabled>
-                      Choose a package
-                    </option>
-                    {serviceItems.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label} htmlFor={`price-${dumpster.id}`}>
-                    Price ($)
-                  </label>
-                  <input
-                    id={`price-${dumpster.id}`}
-                    name="priceDollars"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className={styles.input}
-                    defaultValue={
-                      dumpster.rentalPriceCents != null
-                        ? (dumpster.rentalPriceCents / 100).toFixed(2)
-                        : ""
-                    }
-                  />
-                </div>
                 {/* Capacity and dimensions read as one set of numbers, so they
                     sit on a single row on desktop instead of wrapping through
                     the two-column grid. */}
                 <div className={styles.measureRow}>
-                  <div className={styles.field}>
-                    <label className={styles.label} htmlFor={`weight-${dumpster.id}`}>
-                      Max weight (tons)
-                    </label>
-                    <input
-                      id={`weight-${dumpster.id}`}
-                      name="maxWeightTons"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className={styles.input}
-                      defaultValue={dumpster.maxWeightTons ?? ""}
-                    />
-                  </div>
                   <div className={styles.field}>
                     <label className={styles.label} htmlFor={`length-${dumpster.id}`}>
                       Length (ft)
@@ -284,26 +201,6 @@ export function EditDetailsForm({
                   />
                 </div>
               </div>
-              {/* Allowed and not-allowed are read against each other, so they
-                  sit side by side on desktop rather than stacked. */}
-              <div className={styles.materialsRow}>
-                <MaterialsInput
-                  inputId={`materials-${dumpster.id}`}
-                  label="Materials allowed"
-                  defaultMaterials={dumpster.materialsAllowed}
-                />
-                <MaterialsInput
-                  inputId={`materials-not-${dumpster.id}`}
-                  inputName="materialsNotAllowed"
-                  label="Materials not allowed"
-                  defaultMaterials={dumpster.materialsNotAllowed}
-                />
-              </div>
-              <RentalDurationsInput
-                key={`${dumpster.id}:${dumpster.rentalDurationDays.join(",")}`}
-                legend="Rental duration options"
-                defaultValues={dumpster.rentalDurationDays}
-              />
               <div className={styles.field}>
                 <label className={styles.label} htmlFor={`condition-${dumpster.id}`}>
                   Condition notes
