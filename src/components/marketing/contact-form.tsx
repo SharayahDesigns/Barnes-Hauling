@@ -3,10 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import {
-  INITIAL_CONTACT_FORM_STATE,
-  submitContactForm,
-} from "@/lib/contact/actions";
+import { submitContactForm } from "@/lib/contact/actions";
+import { INITIAL_CONTACT_FORM_STATE } from "@/lib/contact/form-state";
 
 import styles from "./marketing.module.scss";
 

@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { sendContactEmails } from "@/lib/resend/send";
 
+import type { ContactFormState } from "./form-state";
+
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Full name is required.").max(160),
   phone: z
@@ -27,19 +29,6 @@ const contactSchema = z.object({
     .optional()
     .transform((value) => value || ""),
 });
-
-export type ContactFormState = {
-  status: "idle" | "success" | "error";
-  message: string | null;
-  fieldErrors?: Partial<
-    Record<"name" | "phone" | "email" | "service" | "message", string>
-  >;
-};
-
-export const INITIAL_CONTACT_FORM_STATE: ContactFormState = {
-  status: "idle",
-  message: null,
-};
 
 export async function submitContactForm(
   _previousState: ContactFormState,
