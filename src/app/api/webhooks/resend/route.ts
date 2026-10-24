@@ -6,18 +6,18 @@ import { getResendConfig } from "@/lib/resend/config";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const config = getResendConfig();
-
-  if (!config.webhookSecret) {
-    return NextResponse.json(
-      { error: "Missing RESEND_WEBHOOK_SECRET" },
-      { status: 500 },
-    );
-  }
-
-  const payload = await request.text();
-
   try {
+    const config = getResendConfig();
+
+    if (!config.webhookSecret) {
+      return NextResponse.json(
+        { error: "Missing RESEND_WEBHOOK_SECRET" },
+        { status: 500 },
+      );
+    }
+
+    const payload = await request.text();
+
     const event = getResendClient().webhooks.verify({
       payload,
       headers: {
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Invalid Resend webhook", error);
-    return new NextResponse("Invalid webhook", { status: 400 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
